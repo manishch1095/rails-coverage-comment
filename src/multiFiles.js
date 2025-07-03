@@ -1,7 +1,7 @@
 const core = require('@actions/core');
 const ParserManager = require('./parsers');
-const { getCoverageXmlReport } = require('./parseXml');
-const { getSummaryReport } = require('./testResults');
+const { getCoverageXmlReport } = require('./parsers/parseXml');
+const { getSummaryReport } = require('./parsers/testResults');
 
 // Get multiple reports from different files
 const getMultipleReport = (options) => {

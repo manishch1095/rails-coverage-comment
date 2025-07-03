@@ -39905,8 +39905,8 @@ function wrappy (fn, cb) {
 
 const core = __nccwpck_require__(7484);
 const ParserManager = __nccwpck_require__(3662);
-const { getCoverageXmlReport } = __nccwpck_require__(2228);
-const { getSummaryReport } = __nccwpck_require__(2558);
+const { getCoverageXmlReport } = __nccwpck_require__(2028);
+const { getSummaryReport } = __nccwpck_require__(3760);
 
 // Get multiple reports from different files
 const getMultipleReport = (options) => {
@@ -41160,22 +41160,6 @@ module.exports = {
   getFileExtension,
   sanitizeHtml,
 };
-
-
-/***/ }),
-
-/***/ 2228:
-/***/ ((module) => {
-
-module.exports = eval("require")("./parseXml");
-
-
-/***/ }),
-
-/***/ 2558:
-/***/ ((module) => {
-
-module.exports = eval("require")("./testResults");
 
 
 /***/ }),
