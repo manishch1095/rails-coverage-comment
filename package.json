@@ -1,0 +1,57 @@
+{
+  "name": "rails-coverage-comment",
+  "version": "1.0.0",
+  "description": "Comments a pull request with the Rails code coverage badge, full report and tests summary",
+  "author": "Manish Chauhan",
+  "license": "MIT",
+  "keywords": [
+    "actions",
+    "pull-request",
+    "push",
+    "comment",
+    "message",
+    "ruby",
+    "rails",
+    "coverage",
+    "simplecov"
+  ],
+  "bugs": {
+    "url": "https://github.com/manishchauhan/rails-coverage-comment/issues"
+  },
+  "homepage": "https://github.com/manishchauhan/rails-coverage-comment/#readme",
+  "main": "src/index.js",
+  "scripts": {
+    "format": "prettier --write src/**/*.js",
+    "format-check": "prettier --check src/**/*.js",
+    "lint": "eslint src/**/*.js",
+    "build": "ncc build src/index.js --license licenses.txt",
+    "bump-version": "npm version patch",
+    "all": "npm run lint && npm run format && npm run build"
+  },
+  "dependencies": {
+    "@actions/core": "^1.11.1",
+    "@actions/github": "^4.0.0",
+    "xml2js": "^0.6.2"
+  },
+  "devDependencies": {
+    "@vercel/ncc": "^0.38.3",
+    "eslint": "^8.57.1",
+    "prettier": "^3.5.3"
+  },
+  "prettier": {
+    "semi": true,
+    "singleQuote": true
+  },
+  "eslintConfig": {
+    "parserOptions": {
+      "ecmaVersion": 2020
+    },
+    "extends": [
+      "eslint:recommended"
+    ],
+    "env": {
+      "es6": true,
+      "node": true
+    }
+  }
+} 

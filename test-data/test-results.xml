@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="RSpec" tests="109" failures="1" errors="0" skipped="2" time="0.583">
+    <testcase classname="UserController" name="should create user" time="0.1">
+    </testcase>
+    <testcase classname="UserController" name="should update user" time="0.1">
+    </testcase>
+    <testcase classname="UserController" name="should destroy user" time="0.1">
+      <failure message="Expected user to be destroyed">User was not destroyed</failure>
+    </testcase>
+    <testcase classname="UserModel" name="should validate presence of email" time="0.05">
+    </testcase>
+    <testcase classname="UserModel" name="should skip validation test" time="0.01">
+      <skipped message="Test is skipped"/>
+    </testcase>
+    <testcase classname="UserModel" name="should skip another test" time="0.01">
+      <skipped message="Test is skipped"/>
+    </testcase>
+  </testsuite>
+</testsuites> 

@@ -1,0 +1,135 @@
+# action.yml
+name: 'Rails Coverage Comment'
+description: 'SimpleCov coverage reports for Rails - inspired by pytest-coverage-comment but built for Ruby/Rails'
+author: 'Manish Chauhan'
+branding:
+  icon: 'message-circle'
+  color: 'red'
+
+inputs:
+  github-token:
+    description: 'GitHub API Access Token'
+    default: ${{ github.token }}
+    required: true
+
+  coverage-path:
+    description: 'The location of the SimpleCov coverage report (coverage/index.html)'
+    default: './coverage/index.html'
+    required: false
+
+  coverage-xml-path:
+    description: 'The location of coverage-xml from SimpleCov (coverage/coverage.xml)'
+    default: ''
+    required: false
+
+  test-results-path:
+    description: 'The location of test results (test-results.xml or similar)'
+    default: ''
+    required: false
+
+  issue-number:
+    description: 'PR number for the PR you want the comment to post to.'
+    default: ''
+    required: false
+
+  coverage-path-prefix:
+    description: 'Prefix for path when link to files in comment'
+    default: ''
+    required: false
+
+  title:
+    description: 'Title for the coverage report. Useful for monorepo projects'
+    default: 'Coverage Report'
+    required: false
+
+  badge-title:
+    description: 'Title for the badge icon'
+    default: 'Coverage'
+    required: false
+
+  hide-badge:
+    description: 'Hide badge with percentage'
+    default: 'false'
+    required: false
+
+  hide-report:
+    description: 'Hide coverage report'
+    default: 'false'
+    required: false
+
+  hide-comment:
+    description: 'Hide the whole comment (use when you need only `output`)'
+    default: 'false'
+    required: false
+
+  xml-skip-covered:
+    description: 'Hide files from xml report with 100% coverage'
+    default: 'false'
+    required: false
+
+  report-only-changed-files:
+    description: 'Show in report only changed files for this commit, and not all files'
+    default: 'false'
+    required: false
+
+  test-results-title:
+    description: 'Title for summary for test results'
+    default: ''
+    required: false
+
+  create-new-comment:
+    description: 'When false, will update the same comment, otherwise will publish new comment on each run'
+    default: 'false'
+    required: false
+
+  default-branch:
+    description: 'This branch name is useful when generate "coverageHtml", it points direct links to files on this branch (instead of commit). Usually "main" or "master"'
+    default: 'main'
+    required: false
+
+  multiple-files:
+    description: >
+      You can pass array of titles and files to generate single comment with table of results. 
+      Single line should look like `Title, ./path/to/coverage/index.html, ./path/to/test-results.xml`
+      example: 
+        My Title 1, ./data/coverage_1/index.html, ./data/test-results_1.xml
+    default: ''
+    required: false
+
+  remove-link-from-badge:
+    description: 'When true, it will remove the link from badge to readme'
+    default: 'false'
+    required: false
+
+  unique-id-for-comment:
+    description: 'When running in a matrix, pass the matrix value, so each comment will be updated its own comment'
+    default: ''
+    required: false
+
+outputs:
+  coverage:
+    description: 'value indicating the coverage percentage of your report based on SimpleCov, example 85.5%'
+  color:
+    description: 'color of coverage report'
+  coverageHtml:
+    description: 'The html of the coverage report. Html with links to files of missing lines'
+  summaryReport:
+    description: 'Markdown with summary of: Tests/Skipped/Failures/Errors/Time'
+  warnings:
+    description: 'Number of warnings, get from SimpleCov'
+  tests:
+    description: 'Total number of tests, get from test results'
+  skipped:
+    description: 'Total number of skipped tests, get from test results'
+  failures:
+    description: 'Total number of tests with failures, get from test results'
+  errors:
+    description: 'Total number of tests with errors, get from test results'
+  time:
+    description: 'Seconds it took to run all the tests, get from test results'
+  notSuccessTestInfo:
+    description: 'Info from testcase that has failures/errors/skipped, get from test results'
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js' 

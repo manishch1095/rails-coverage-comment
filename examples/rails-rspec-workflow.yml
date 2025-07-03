@@ -1,0 +1,44 @@
+name: Rails Coverage Comment with RSpec
+
+on:
+  pull_request:
+    branches:
+      - '*'
+
+permissions:
+  contents: write
+  checks: write
+  pull-requests: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+
+      - name: Install dependencies
+        run: |
+          bundle install
+
+      - name: Setup database
+        run: |
+          bundle exec rails db:create
+          bundle exec rails db:schema:load
+
+      - name: Run tests with coverage
+        run: |
+          bundle exec rspec --format progress --format RspecJunitFormatter --out test-results.xml
+
+      - name: Rails coverage comment
+        uses: manishchauhan/rails-coverage-comment@main
+        with:
+          coverage-path: ./coverage/index.html
+          test-results-path: ./test-results.xml
+          title: 'RSpec Coverage Report'
+          badge-title: 'RSpec Coverage' 
