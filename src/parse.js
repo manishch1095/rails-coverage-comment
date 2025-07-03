@@ -222,8 +222,8 @@ const toHtml = (data, options) => {
   const badge = hideBadge
     ? ''
     : removeLinkFromBadge
-    ? `<img alt="Coverage" src="${badgeUrl}" /><br/>`
-    : `<a href="${badgeUrl}"><img alt="Coverage" src="${badgeUrl}" /></a><br/>`;
+      ? `<img alt="Coverage" src="${badgeUrl}" /><br/>`
+      : `<a href="${badgeUrl}"><img alt="Coverage" src="${badgeUrl}" /></a><br/>`;
 
   const report = hideReport
     ? ''
