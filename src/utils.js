@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const core = require('@actions/core');
 
 // Get the path to a file, handling both relative and absolute paths
 const getPathToFile = (filePath) => {
@@ -14,16 +15,29 @@ const getPathToFile = (filePath) => {
   return path.resolve(process.cwd(), filePath);
 };
 
-// Read file content
+// Async read file content
+const getContentFileAsync = async (filePath) => {
+  if (!filePath) {
+    return null;
+  }
+  try {
+    await fs.promises.access(filePath, fs.constants.F_OK);
+    return await fs.promises.readFile(filePath, 'utf8');
+  } catch (error) {
+    core.error(`Error reading file ${filePath}: ${error.message}`);
+    return null;
+  }
+};
+
+// Sync read file content (legacy)
 const getContentFile = (filePath) => {
   if (!filePath || !fs.existsSync(filePath)) {
     return null;
   }
-
   try {
     return fs.readFileSync(filePath, 'utf8');
   } catch (error) {
-    console.error(`Error reading file ${filePath}:`, error.message);
+    core.error(`Error reading file ${filePath}: ${error.message}`);
     return null;
   }
 };
@@ -73,7 +87,17 @@ const formatTime = (seconds) => {
   }
 };
 
-// Check if a file exists
+// Async check if a file exists
+const fileExistsAsync = async (filePath) => {
+  try {
+    await fs.promises.access(filePath, fs.constants.F_OK);
+    return true;
+  } catch (error) {
+    return false;
+  }
+};
+
+// Sync check if a file exists (legacy)
 const fileExists = (filePath) => {
   try {
     return fs.existsSync(filePath);
@@ -102,10 +126,12 @@ const sanitizeHtml = (html) => {
 module.exports = {
   getPathToFile,
   getContentFile,
+  getContentFileAsync,
   getCoverageColor,
   extractPercentage,
   formatTime,
   fileExists,
+  fileExistsAsync,
   getFileExtension,
   sanitizeHtml,
 };

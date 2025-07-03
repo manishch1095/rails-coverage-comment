@@ -1,15 +1,167 @@
 const core = require('@actions/core');
 const github = require('@actions/github');
-const { getCoverageReport } = require('./parse');
-const { getCoverageXmlReport } = require('./parseXml');
-const {
-  getSummaryReport,
-  getParsedTestResults,
-  getNotSuccessTestInfo,
-} = require('./testResults');
+const ParserManager = require('./parsers');
 const { getMultipleReport } = require('./multiFiles');
 
 const MAX_COMMENT_LENGTH = 65536;
+
+// Get coverage color based on percentage
+const getCoverageColor = (percentage) => {
+  if (percentage >= 90) return 'brightgreen';
+  if (percentage >= 80) return 'green';
+  if (percentage >= 70) return 'yellowgreen';
+  if (percentage >= 60) return 'yellow';
+  if (percentage >= 50) return 'orange';
+  return 'red';
+};
+
+// Generate coverage summary HTML
+const generateCoverageSummary = (coverageData, options = {}) => {
+  if (!coverageData) return '';
+
+  const { overall, groups } = coverageData;
+  const { title = 'Coverage Report' } = options;
+
+  let html = '## ' + title + '\n\n';
+  html += 'Code coverage analysis completed successfully.\n\n';
+
+  // Overall summary
+  html += '### Overall Summary\n\n';
+  html += '| Metric | Value |\n';
+  html += '|--------|-------|\n';
+  html += '| Files | ' + overall.files + ' |\n';
+  html += '| Lines | ' + overall.lines + ' |\n';
+  html += '| Covered | ' + overall.covered + ' |\n';
+  html += '| Missed | ' + overall.missed + ' |\n';
+  html += '| **Coverage** | **' + overall.percentage + '%** |\n';
+
+  if (overall.branches) {
+    html +=
+      '| **Branch Coverage** | **' + overall.branches.percentage + '%** |\n';
+  }
+
+  html += '\n';
+
+  // Group breakdown
+  if (groups && groups.length > 0) {
+    html += '### Coverage by Category\n\n';
+    html += '| Category | Files | Lines | Covered | Missed | Coverage |\n';
+    html += '|----------|-------|-------|---------|--------|----------|\n';
+
+    groups.forEach((group) => {
+      html +=
+        '| ' +
+        group.name +
+        ' | ' +
+        group.files +
+        ' | ' +
+        group.lines +
+        ' | ' +
+        group.covered +
+        ' | ' +
+        group.missed +
+        ' | ' +
+        group.percentage +
+        '% |\n';
+    });
+
+    html += '\n';
+  }
+
+  return html;
+};
+
+// Generate file details HTML
+const generateFileDetails = (coverageData, options = {}) => {
+  if (!coverageData || !coverageData.files) return '';
+
+  const { files, filesTruncated } = coverageData;
+  const { maxFilesToShow = 50 } = options;
+
+  let html = '### File Coverage Details\n\n';
+  html += 'Individual file coverage breakdown:\n\n';
+  html += '| File | Lines | Covered | Missed | Coverage |\n';
+  html += '|------|-------|---------|--------|----------|\n';
+
+  files.forEach((file) => {
+    html +=
+      '| `' +
+      file.name +
+      '` | ' +
+      file.lines +
+      ' | ' +
+      file.covered +
+      ' | ' +
+      file.missed +
+      ' | ' +
+      file.percentage +
+      '% |\n';
+  });
+
+  if (filesTruncated) {
+    html +=
+      '\n*Showing first ' +
+      maxFilesToShow +
+      ' files. Enable `include-file-details: true` to see all files.*\n';
+  }
+
+  html += '\n';
+  return html;
+};
+
+// Generate last run coverage HTML
+const generateLastRunSection = (lastRunData, options = {}) => {
+  if (!lastRunData) return '';
+  const { title = 'Last Run Coverage', hideBadge = false } = options;
+  const { line, branch } = lastRunData;
+
+  let html = '## ' + title + '\n\n';
+
+  if (!hideBadge) {
+    html +=
+      '![Line Coverage](https://img.shields.io/badge/Line-' +
+      line.toFixed(1) +
+      '%25-' +
+      getCoverageColor(line) +
+      ')\n';
+    html +=
+      '![Branch Coverage](https://img.shields.io/badge/Branch-' +
+      branch.toFixed(1) +
+      '%25-' +
+      getCoverageColor(branch) +
+      ')\n\n';
+  }
+
+  html += '| Coverage Type | Percentage |\n';
+  html += '|---------------|------------|\n';
+  html += '| Line | ' + line.toFixed(1) + '% |\n';
+  html += '| Branch | ' + branch.toFixed(1) + '% |\n\n';
+  return html;
+};
+
+// Generate test results HTML
+const generateTestResultsSection = (testResults, options = {}) => {
+  if (!testResults) return '';
+  const { title = 'Test Results' } = options;
+  const { tests, errors, failures, skipped, time } = testResults;
+  
+  let html = '## ' + title + '\n\n';
+  html += '**Test Execution Summary:**\n\n';
+  html += '📊 **Total Tests:** ' + tests + '\n';
+  html += '❌ **Failures:** ' + failures + '\n';
+  html += '⚠️ **Errors:** ' + errors + '\n';
+  html += '⏭️ **Skipped:** ' + skipped + '\n';
+  html += '⏱️ **Execution Time:** ' + time + 's\n\n';
+  
+  // Add status summary
+  if (failures === 0 && errors === 0) {
+    html += '✅ **Status:** All tests passed successfully!\n\n';
+  } else {
+    html += '❌ **Status:** Some tests failed or encountered errors.\n\n';
+  }
+  
+  return html;
+};
 
 // Create or edit a comment on a PR
 const createOrEditComment = async (
@@ -48,62 +200,35 @@ const createOrEditComment = async (
   }
 };
 
-// Get changed files for the PR
-const getChangedFiles = async (options, pr_number) => {
-  if (!pr_number) {
-    return null;
-  }
-
-  try {
-    const octokit = github.getOctokit(options.token);
-    const { data: files } = await octokit.pulls.listFiles({
-      repo: options.repository.split('/')[1],
-      owner: options.repository.split('/')[0],
-      pull_number: parseInt(pr_number),
-    });
-
-    return files.map((file) => file.filename);
-  } catch (error) {
-    core.error(`Error getting changed files: ${error.message}`);
-    return null;
-  }
-};
-
 // Main function
 const main = async () => {
   const token = core.getInput('github-token', { required: true });
   const title = core.getInput('title', { required: false });
-  const badgeTitle = core.getInput('badge-title', { required: false });
+
   const hideBadge = core.getBooleanInput('hide-badge', { required: false });
   const hideReport = core.getBooleanInput('hide-report', { required: false });
-  const createNewComment = core.getBooleanInput('create-new-comment', {
+  const coverageFile = core.getInput('coverage-file', { required: false });
+  const includeFileDetails = core.getBooleanInput('include-file-details', {
     required: false,
   });
-  const hideComment = core.getBooleanInput('hide-comment', { required: false });
-  const xmlSkipCovered = core.getBooleanInput('xml-skip-covered', {
+  const maxFilesToShow =
+    parseInt(core.getInput('max-files-to-show', { required: false })) || 50;
+  const includeLastRun = core.getBooleanInput('include-last-run', {
     required: false,
   });
-  const reportOnlyChangedFiles = core.getBooleanInput(
-    'report-only-changed-files',
-    { required: false },
-  );
-  const removeLinkFromBadge = core.getBooleanInput('remove-link-from-badge', {
-    required: false,
-  });
-  const uniqueIdForComment = core.getInput('unique-id-for-comment', {
-    required: false,
-  });
-  const defaultBranch = core.getInput('default-branch', { required: false });
-  const coveragePath = core.getInput('coverage-path', { required: false });
-  const issueNumberInput = core.getInput('issue-number', { required: false });
-  const coverageXmlPath = core.getInput('coverage-xml-path', {
-    required: false,
-  });
-  const pathPrefix = core.getInput('coverage-path-prefix', { required: false });
+  const lastRunTitle =
+    core.getInput('last-run-title', { required: false }) || 'Last Run Coverage';
   const testResultsPath = core.getInput('test-results-path', {
     required: false,
   });
-  const testResultsTitle = core.getInput('test-results-title', {
+  const testResultsTitle =
+    core.getInput('test-results-title', { required: false }) || 'Test Results';
+  const issueNumberInput = core.getInput('issue-number', { required: false });
+  const hideComment = core.getBooleanInput('hide-comment', { required: false });
+  const createNewComment = core.getBooleanInput('create-new-comment', {
+    required: false,
+  });
+  const uniqueIdForComment = core.getInput('unique-id-for-comment', {
     required: false,
   });
   const multipleFiles = core.getMultilineInput('multiple-files', {
@@ -114,133 +239,127 @@ const main = async () => {
   const { repo, owner } = context.repo;
   const { eventName, payload } = context;
   const watermarkUniqueId = uniqueIdForComment
-    ? `| ${uniqueIdForComment} `
+    ? '| ' + uniqueIdForComment + ' '
     : '';
-  const WATERMARK = `<!-- Rails Coverage Comment: ${context.job} ${watermarkUniqueId}-->\n`;
+  const WATERMARK =
+    '<!-- Rails Coverage Comment: ' +
+    context.job +
+    ' ' +
+    watermarkUniqueId +
+    '-->\n';
   let finalHtml = '';
 
-  const options = {
-    token,
-    repository: repository || `${owner}/${repo}`,
-    prefix: `${process.env.GITHUB_WORKSPACE}/`,
-    pathPrefix,
-    coveragePath,
-    coverageXmlPath,
-    testResultsPath,
-    title,
-    badgeTitle,
-    hideBadge,
-    hideReport,
-    createNewComment,
-    hideComment,
-    xmlSkipCovered,
-    reportOnlyChangedFiles,
-    removeLinkFromBadge,
-    defaultBranch,
-    testResultsTitle,
-    multipleFiles,
-  };
+  // Initialize parser manager and parse all available data
+  const parserManager = new ParserManager();
+  const parsedData = await parserManager.autoDetectAndParse({
+    coverageFile: coverageFile,
+    includeFileDetails: includeFileDetails,
+    maxFilesToShow: maxFilesToShow,
+    lastRunFile: 'coverage/.last_run.json',
+    testResultsFile: testResultsPath || 'test-results.xml',
+  });
 
-  options.repoUrl =
-    payload.repository?.html_url || `https://github.com/${options.repository}`;
-
-  // Set commit and branch information based on event type
-  if (eventName === 'pull_request' || eventName === 'pull_request_target') {
-    options.commit = payload.pull_request.head.sha;
-    options.head = payload.pull_request.head.ref;
-    options.base = payload.pull_request.base.ref;
-  } else if (eventName === 'push') {
-    options.commit = payload.after;
-    options.head = context.ref;
-  } else if (eventName === 'workflow_dispatch') {
-    options.commit = context.sha;
-    options.head = context.ref;
-  } else if (eventName === 'workflow_run') {
-    options.commit = payload.workflow_run.head_sha;
-    options.head = payload.workflow_run.head_branch;
-  }
-
-  // Get changed files if requested
-  if (options.reportOnlyChangedFiles) {
-    const changedFiles = await getChangedFiles(options, issueNumberInput);
-    options.changedFiles = changedFiles;
-
-    // If we can't get changed files, disable the feature
-    if (!changedFiles) {
-      options.reportOnlyChangedFiles = false;
+  // Generate coverage section
+  let coverageHtml = '';
+  if (parsedData.coverage && !hideReport) {
+    core.info('Coverage data found and report not hidden');
+    coverageHtml = generateCoverageSummary(parsedData.coverage, {
+      title: title,
+      hideBadge: hideBadge,
+    });
+    // Add file details if requested
+    if (includeFileDetails && parsedData.coverage.files) {
+      coverageHtml += generateFileDetails(parsedData.coverage, {
+        maxFilesToShow: maxFilesToShow,
+      });
     }
-  }
-
-  // Generate coverage report
-  let report;
-  if (options.coverageXmlPath) {
-    report = await getCoverageXmlReport(options);
+    // Set coverage outputs
+    const { overall } = parsedData.coverage;
+    core.setOutput('coverage', overall.percentage + '%');
+    core.setOutput('color', getCoverageColor(parseFloat(overall.percentage)));
+    core.setOutput('warnings', '0');
   } else {
-    report = getCoverageReport(options);
+    core.info('Coverage data not found or report is hidden');
+    core.info('parsedData.coverage:', !!parsedData.coverage);
+    core.info('hideReport:', hideReport);
   }
 
-  const { coverage, color, html, warnings } = report;
-  const summaryReport = await getSummaryReport(options);
-
-  // Set outputs
-  core.setOutput('coverage', coverage);
-  core.setOutput('color', color);
-  core.setOutput('warnings', warnings);
-
-  if (summaryReport) {
-    core.setOutput('summaryReport', summaryReport);
+  // Generate last run section
+  let lastRunHtml = '';
+  if (includeLastRun && parsedData.lastRun) {
+    lastRunHtml = generateLastRunSection(parsedData.lastRun, {
+      title: lastRunTitle,
+      hideBadge: hideBadge,
+    });
+    core.setOutput('line-coverage', parsedData.lastRun.line.toFixed(1) + '%');
+    core.setOutput(
+      'branch-coverage',
+      parsedData.lastRun.branch.toFixed(1) + '%',
+    );
   }
 
-  if (html) {
-    const newOptions = { ...options, commit: defaultBranch };
-    const output = getCoverageReport(newOptions);
-    core.setOutput('coverageHtml', output.html);
-  }
-
-  // Set test results outputs
-  if (testResultsPath) {
-    const parsedResults = await getParsedTestResults(options);
-    const { errors, failures, skipped, tests, time } = parsedResults;
+  // Generate test results section
+  let testResultsHtml = '';
+  if (parsedData.testResults) {
+    testResultsHtml = generateTestResultsSection(parsedData.testResults, {
+      title: testResultsTitle,
+    });
+    // Set test results outputs
+    const { errors, failures, skipped, tests, time } = parsedData.testResults;
     const valuesToExport = { errors, failures, skipped, tests, time };
-
     Object.entries(valuesToExport).forEach(([key, value]) => {
-      core.info(`${key}: ${value}`);
+      core.info(key + ': ' + value);
       core.setOutput(key, value);
     });
-
-    const notSuccessTestInfo = await getNotSuccessTestInfo(options);
-    core.setOutput('notSuccessTestInfo', JSON.stringify(notSuccessTestInfo));
   }
 
-  // Handle multiple files
+  // Handle multiple files (legacy support)
   let multipleFilesHtml = '';
   if (multipleFiles && multipleFiles.length) {
-    multipleFilesHtml = `\n\n${getMultipleReport(options)}`;
+    const options = {
+      token,
+      repository: repository || owner + '/' + repo,
+      prefix: process.env.GITHUB_WORKSPACE + '/',
+      multipleFiles,
+    };
+    multipleFilesHtml = '\n\n' + getMultipleReport(options);
   }
 
   // Check comment length
+  const totalLength =
+    coverageHtml.length +
+    lastRunHtml.length +
+    testResultsHtml.length +
+    multipleFilesHtml.length;
   if (
-    !options.hideReport &&
-    html.length + summaryReport.length > MAX_COMMENT_LENGTH &&
+    totalLength > MAX_COMMENT_LENGTH &&
     eventName !== 'workflow_dispatch' &&
     eventName !== 'workflow_run'
   ) {
     core.warning(
-      `Your comment is too long (maximum is ${MAX_COMMENT_LENGTH} characters), coverage report will not be added.`,
+      'Your comment is too long (maximum is ' +
+        MAX_COMMENT_LENGTH +
+        ' characters), some sections will be truncated.',
     );
     core.warning(
-      `Try adding "hide-report: true" or "report-only-changed-files: true", or switch to "multiple-files" mode`,
+      'Try adding "hide-report: true" or "include-file-details: false" to reduce comment size.',
     );
-    report = { ...report, html: '' };
   }
 
-  // Build final comment
-  if (!options.hideComment) {
-    finalHtml = WATERMARK + html + summaryReport + multipleFilesHtml;
-  }
+  // Combine all sections
+  finalHtml =
+    WATERMARK +
+    '\n\n' +
+    coverageHtml +
+    '\n\n' +
+    testResultsHtml +
+    '\n\n' +
+    lastRunHtml +
+    '\n\n' +
+    multipleFilesHtml;
 
   // Post comment if not hidden
-  if (!options.hideComment && finalHtml) {
+  if (!hideComment && finalHtml) {
     const octokit = github.getOctokit(token);
     const issue_number =
       issueNumberInput || payload.pull_request?.number || payload.issue?.number;
@@ -252,7 +371,7 @@ const main = async () => {
       return;
     }
 
-    if (options.createNewComment) {
+    if (createNewComment) {
       core.info('Creating new comment');
       await octokit.issues.createComment({
         repo,
@@ -273,6 +392,10 @@ const main = async () => {
   }
 
   core.info('Rails Coverage Comment action completed successfully');
+  core.info('Coverage HTML: ' + coverageHtml);
+  if (lastRunHtml) core.info('Last Run HTML: ' + lastRunHtml);
+  if (testResultsHtml) core.info('Test Results HTML: ' + testResultsHtml);
+  if (multipleFilesHtml) core.info('Multiple Files HTML: ' + multipleFilesHtml);
 };
 
 // Run the main function

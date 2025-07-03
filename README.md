@@ -56,6 +56,8 @@ Add this action to your GitHub workflow for Ubuntu runners:
 | `multiple-files`            |          | ''                      | You can pass array of titles and files to generate single comment with table of results. Single line should look like `Title, ./path/to/coverage/index.html, ./path/to/test-results.xml`                                                                                                                                                                                             |
 | `remove-link-from-badge`    |          | false                   | When true, it will remove the link from badge to readme                                                                                                                                                                                                                                                                                                                             |
 | `unique-id-for-comment`     |          | ''                      | When running in a matrix, pass the matrix value, so each comment will be updated its own comment `unique-id-for-comment: ${{ matrix.ruby-version }}`                                                                                                                                                                                                                              |
+| `include-last-run`          |          | false                   | Include SimpleCov .last_run.json data in the comment (shows line and branch coverage)                                                                                                                                                                                                                                                                                               |
+| `last-run-title`            |          | 'Last Run Coverage'      | Title for the last run coverage section                                                                                                                                                                                                                                                                                                                                             |
 
 ## Output Variables
 
@@ -72,6 +74,8 @@ Add this action to your GitHub workflow for Ubuntu runners:
 | `errors`             | 0                              | Total number of tests with errors, get from test results                             |
 | `time`               | 0.583                          | Seconds it took to run all the tests, get from test results                          |
 | `notSuccessTestInfo` | [example](#notSuccessTestInfo) | Info from testcase that has failures/errors/skipped, get from test results           |
+| `line-coverage`      | 93.3%                          | Line coverage percentage from .last_run.json                                         |
+| `branch-coverage`    | 76.8%                          | Branch coverage percentage from .last_run.json                                       |
 
 ### notSuccessTestInfo
 
@@ -223,6 +227,24 @@ jobs:
     echo "Not Success Test Info - ${{ steps.coverageComment.outputs.notSuccessTestInfo }}"
 ```
 
+### Using SimpleCov .last_run.json
+
+```yaml
+- name: Rails coverage comment
+  id: coverageComment
+  uses: manishch1095/rails-coverage-comment@v1.0.0
+  with:
+    coverage-path: ./coverage/index.html
+    test-results-path: ./test-results.xml
+    include-last-run: true
+    last-run-title: 'Coverage Metrics'
+
+- name: Check last run coverage
+  run: |
+    echo "Line Coverage - ${{ steps.coverageComment.outputs.line-coverage }}"
+    echo "Branch Coverage - ${{ steps.coverageComment.outputs.branch-coverage }}"
+```
+
 ### Multiple Coverage Reports (Monorepo)
 
 ```yaml
@@ -288,6 +310,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Acknowledgments
 
 - Inspired by [pytest-coverage-comment](https://github.com/MishaKav/pytest-coverage-comment)
-- Built for the Rails community 
+- Built for the Rails community
+
+<!-- Testing PR comment functionality with new features --> 
 
 <!-- Test PR comment generation --> 

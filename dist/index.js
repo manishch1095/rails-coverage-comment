@@ -39904,9 +39904,9 @@ function wrappy (fn, cb) {
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 const core = __nccwpck_require__(7484);
-const { getCoverageReport } = __nccwpck_require__(3046);
-const { getCoverageXmlReport } = __nccwpck_require__(841);
-const { getSummaryReport } = __nccwpck_require__(3255);
+const ParserManager = __nccwpck_require__(3662);
+const { getCoverageXmlReport } = __nccwpck_require__(2028);
+const { getSummaryReport } = __nccwpck_require__(3760);
 
 // Get multiple reports from different files
 const getMultipleReport = (options) => {
@@ -39950,7 +39950,20 @@ const generateSingleReport = (options) => {
     if (coverageXmlPath) {
       report = getCoverageXmlReport(options);
     } else {
-      report = getCoverageReport(options);
+      // Use ParserManager for JSON coverage
+      const parserManager = new ParserManager();
+      const parsed = parserManager.autoDetectAndParse({
+        coverageFile: coveragePath,
+        includeFileDetails: false,
+      });
+      if (parsed.coverage && parsed.coverage.overall) {
+        report = {
+          coverage: parsed.coverage.overall.percentage + '%',
+          color: getStatusColor(parsed.coverage.overall.percentage),
+        };
+      } else {
+        report = { coverage: '0%', color: 'red' };
+      }
     }
 
     const summaryReport = getSummaryReport(options);
@@ -39970,6 +39983,17 @@ const generateSingleReport = (options) => {
   }
 };
 
+// Helper to get color for status badge
+const getStatusColor = (percentage) => {
+  const pct = parseFloat(percentage);
+  if (pct >= 90) return 'brightgreen';
+  if (pct >= 80) return 'green';
+  if (pct >= 70) return 'yellowgreen';
+  if (pct >= 60) return 'yellow';
+  if (pct >= 50) return 'orange';
+  return 'red';
+};
+
 // Convert multiple report to table row
 const toMultiRow = (title, report) => {
   const { coverage, color, summary } = report;
@@ -39985,7 +40009,7 @@ const toMultiRow = (title, report) => {
 
   const status = getStatusFromReport(report);
 
-  return `<tr><td>${title}</td><td><img alt="Coverage" src="https://img.shields.io/badge/Coverage-${coverage}-${color}.svg" /></td><td>${testInfo}</td><td>${status}</td></tr>`;
+  return `<tr><td>${title}</td><td><img alt="Coverage" src="https://img.shields.io/badge/Coverage-${coverage.replace('%', '%25')}-${color}.svg" /></td><td>${testInfo}</td><td>${status}</td></tr>`;
 };
 
 // Get status from report
@@ -40014,262 +40038,228 @@ module.exports = {
 
 /***/ }),
 
-/***/ 3046:
+/***/ 3662:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-const core = __nccwpck_require__(7484);
-const {
-  getPathToFile,
-  getContentFile,
-  getCoverageColor,
-  extractPercentage,
-} = __nccwpck_require__(5804);
+const fs = __nccwpck_require__(9896);
 
-// Check if the coverage file contains valid SimpleCov HTML content
-const isValidCoverageContent = (data) => {
-  if (!data || !data.length) {
-    return false;
-  }
+// Import existing parsers
+const { parseLastRun } = __nccwpck_require__(5975);
+const { parseTestResults } = __nccwpck_require__(3760);
+const { parseXml } = __nccwpck_require__(2028);
 
-  const wordsToInclude = ['SimpleCov', 'coverage', 'Total', 'Coverage'];
+// Import new SimpleCov parser
+const { parseSimpleCov } = __nccwpck_require__(9744);
 
-  return wordsToInclude.some((w) => data.includes(w));
-};
-
-// Extract total coverage percentage from SimpleCov HTML
-const getTotalCoverage = (data) => {
-  if (!data) return '0';
-
-  // Look for total coverage in the HTML
-  const totalMatch = data.match(/Total.*?(\d+(?:\.\d+)?)%/i);
-  if (totalMatch) {
-    return totalMatch[1];
-  }
-
-  // Alternative pattern for SimpleCov HTML
-  const coverageMatch = data.match(/coverage.*?(\d+(?:\.\d+)?)%/i);
-  if (coverageMatch) {
-    return coverageMatch[1];
-  }
-
-  return '0';
-};
-
-// Parse file coverage data from SimpleCov HTML
-const parseFileCoverage = (data) => {
-  if (!data) return [];
-
-  const files = [];
-
-  // Extract file information from SimpleCov HTML
-  // This regex looks for file entries in the coverage report
-  const fileRegex =
-    /<tr[^>]*class="[^"]*file[^"]*"[^>]*>.*?<td[^>]*>([^<]+)<\/td>.*?<td[^>]*>(\d+)<\/td>.*?<td[^>]*>(\d+)<\/td>.*?<td[^>]*>(\d+(?:\.\d+)?)%<\/td>/gis;
-
-  let match;
-  while ((match = fileRegex.exec(data)) !== null) {
-    const fileName = match[1].trim();
-    const statements = parseInt(match[2]) || 0;
-    const missed = parseInt(match[3]) || 0;
-    const coverage = match[4];
-
-    files.push({
-      name: fileName,
-      stmts: statements.toString(),
-      miss: missed.toString(),
-      cover: coverage,
-      missing: missed > 0 ? 'lines' : null, // SimpleCov doesn't provide specific line numbers in HTML
-    });
-  }
-
-  return files;
-};
-
-// Get total statistics from SimpleCov HTML
-const getTotal = (data) => {
-  if (!data) return null;
-
-  const totalMatch = data.match(/Total.*?(\d+).*?(\d+).*?(\d+(?:\.\d+)?)%/i);
-  if (totalMatch) {
-    return {
-      name: 'TOTAL',
-      stmts: totalMatch[1],
-      miss: totalMatch[2],
-      cover: totalMatch[3] + '%',
+/**
+ * Main parser coordinator
+ * Manages all coverage and test result parsers
+ */
+class ParserManager {
+  constructor() {
+    this.parsers = {
+      lastRun: parseLastRun,
+      testResults: parseTestResults,
+      xml: parseXml,
+      simplecov: parseSimpleCov,
     };
   }
 
-  return null;
-};
-
-// Get warnings from SimpleCov HTML (if any)
-const getWarnings = (data) => {
-  if (!data) return 0;
-
-  // SimpleCov typically doesn't show warnings in HTML, but we can look for them
-  const warningMatch = data.match(/warning/gi);
-  return warningMatch ? warningMatch.length : 0;
-};
-
-// Parse coverage data from SimpleCov HTML
-const parse = (data) => {
-  return parseFileCoverage(data);
-};
-
-// Group files by folders
-const makeFolders = (coverage, options) => {
-  const folders = {};
-
-  for (const line of coverage) {
-    const parts = line.name.replace(options.prefix || '', '').split('/');
-    const folder = parts.slice(0, -1).join('/');
-
-    folders[folder] = folders[folder] || [];
-    folders[folder].push(line);
+  /**
+   * Parse last run data from .last_run.json
+   */
+  parseLastRun(filePath) {
+    if (!fs.existsSync(filePath)) {
+      return null;
+    }
+    return this.parsers.lastRun(filePath);
   }
 
-  return folders;
-};
+  /**
+   * Parse test results from XML file
+   */
+  parseTestResults(filePath) {
+    if (!fs.existsSync(filePath)) {
+      return null;
+    }
+    return this.parsers.testResults(filePath);
+  }
 
-// Convert coverage data to HTML table
-const toTable = (data, options, dataFromXml = null) => {
-  const coverage = dataFromXml ? dataFromXml.files : parse(data);
-  const folders = makeFolders(coverage, options);
-  const total = dataFromXml ? dataFromXml.total : getTotal(data);
+  /**
+   * Parse XML files (legacy support)
+   */
+  parseXml(filePath) {
+    if (!fs.existsSync(filePath)) {
+      return null;
+    }
+    return this.parsers.xml(filePath);
+  }
 
-  let html =
-    '<table><tr><th>File</th><th>Stmts</th><th>Miss</th><th>Cover</th><th>Missing</th></tr><tbody>';
+  /**
+   * Parse SimpleCov coverage data
+   */
+  parseSimpleCov(filePath, includeFileDetails = false) {
+    if (!fs.existsSync(filePath)) {
+      return null;
+    }
+    return this.parsers.simplecov(filePath, includeFileDetails);
+  }
 
-  // Add files grouped by folders
-  Object.keys(folders)
-    .sort()
-    .forEach((folder) => {
-      if (folder) {
-        html += `<tr><td colspan="5"><b>${folder}</b></td></tr>`;
+  /**
+   * Auto-detect and parse available coverage files
+   */
+  autoDetectAndParse(options = {}) {
+    const results = {};
+
+    // Check for SimpleCov coverage.json
+    const coverageFile = options.coverageFile || 'coverage/coverage.json';
+    const includeFileDetails = options.includeFileDetails || false;
+    const maxFilesToShow = options.maxFilesToShow || 50;
+
+    if (fs.existsSync(coverageFile)) {
+      results.coverage = this.parseSimpleCov(coverageFile, includeFileDetails);
+
+      // Limit file details if too many files
+      if (
+        results.coverage &&
+        results.coverage.files &&
+        results.coverage.files.length > maxFilesToShow
+      ) {
+        results.coverage.files = results.coverage.files.slice(
+          0,
+          maxFilesToShow,
+        );
+        results.coverage.filesTruncated = true;
       }
+    }
 
-      folders[folder].forEach((file) => {
-        html += toRow(file, !!folder, options);
-      });
-    });
+    // Check for .last_run.json
+    const lastRunFile = options.lastRunFile || 'coverage/.last_run.json';
+    if (fs.existsSync(lastRunFile)) {
+      results.lastRun = this.parseLastRun(lastRunFile);
+    }
 
-  // Add total row
-  if (total) {
-    html += toTotalRow(total);
+    // Check for test results
+    const testResultsFile = options.testResultsFile || 'test-results.xml';
+    if (fs.existsSync(testResultsFile)) {
+      results.testResults = this.parseTestResults(testResultsFile);
+    }
+
+    return results;
+  }
+}
+
+module.exports = ParserManager;
+
+
+/***/ }),
+
+/***/ 5975:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+const fs = __nccwpck_require__(9896);
+const path = __nccwpck_require__(6928);
+const core = __nccwpck_require__(7484);
+
+// Parse SimpleCov .last_run.json file
+const parseLastRun = (filePath) => {
+  try {
+    if (!fs.existsSync(filePath)) {
+      return null;
+    }
+
+    const content = fs.readFileSync(filePath, 'utf8');
+    const data = JSON.parse(content);
+
+    if (!data.result) {
+      return null;
+    }
+
+    return {
+      line: data.result.line || 0,
+      branch: data.result.branch || 0,
+    };
+  } catch (error) {
+    core.warning(`Failed to parse .last_run.json: ${error.message}`);
+    return null;
+  }
+};
+
+// Get coverage color based on percentage
+const getCoverageColor = (percentage) => {
+  if (percentage >= 90) return 'brightgreen';
+  if (percentage >= 80) return 'green';
+  if (percentage >= 70) return 'yellowgreen';
+  if (percentage >= 60) return 'yellow';
+  if (percentage >= 50) return 'orange';
+  return 'red';
+};
+
+// Generate HTML for last run coverage
+const generateLastRunHtml = (lastRunData, options = {}) => {
+  if (!lastRunData) {
+    return '';
   }
 
-  html += '</tbody></table>';
-  return html;
+  const { title = 'Last Run Coverage', hideBadge = false } = options;
+
+  const lineColor = getCoverageColor(lastRunData.line);
+  const branchColor = getCoverageColor(lastRunData.branch);
+
+  const lineBadge = `https://img.shields.io/badge/Line-${lastRunData.line.toFixed(1)}%25-${lineColor}.svg`;
+  const branchBadge = `https://img.shields.io/badge/Branch-${lastRunData.branch.toFixed(1)}%25-${branchColor}.svg`;
+
+  const badges = hideBadge
+    ? ''
+    : `<img alt="Line Coverage" src="${lineBadge}" /> <img alt="Branch Coverage" src="${branchBadge}" /><br/>`;
+
+  const table = `
+<table>
+<tr><th>Coverage Type</th><th>Percentage</th><th>Status</th></tr>
+<tr><td>Line Coverage</td><td>${lastRunData.line.toFixed(1)}%</td><td>${getStatusEmoji(lastRunData.line)}</td></tr>
+<tr><td>Branch Coverage</td><td>${lastRunData.branch.toFixed(1)}%</td><td>${getStatusEmoji(lastRunData.branch)}</td></tr>
+</table>`;
+
+  return `<details><summary>${title}</summary>${badges}${table}</details>`;
 };
 
-// Convert a file row to HTML
-const toRow = (item, indent = false, options) => {
-  const fileNameTd = toFileNameTd(item, indent, options);
-  const missingTd = toMissingTd(item, options);
-
-  return `<tr><td>${fileNameTd}</td><td>${item.stmts}</td><td>${item.miss}</td><td>${item.cover}</td><td>${missingTd}</td></tr>`;
+// Get status emoji based on coverage percentage
+const getStatusEmoji = (percentage) => {
+  if (percentage >= 90) return '🟢 Excellent';
+  if (percentage >= 80) return '🟡 Good';
+  if (percentage >= 70) return '🟠 Fair';
+  return '🔴 Poor';
 };
 
-// Convert total row to HTML
-const toTotalRow = (item) => {
-  return `<tr><td><b>${item.name}</b></td><td><b>${item.stmts}</b></td><td><b>${item.miss}</b></td><td><b>${item.cover}</b></td><td>&nbsp;</td></tr>`;
-};
-
-// Convert file name to HTML with link
-const toFileNameTd = (item, indent = false, options) => {
-  const { repoUrl, commit, pathPrefix } = options;
-  const indentStr = indent ? '&nbsp; &nbsp;' : '';
-  const fileName = item.name.replace(options.prefix || '', '');
-
-  const fileUrl = `${repoUrl}/blob/${commit}/${pathPrefix || ''}${fileName}`;
-  return `${indentStr}<a href="${fileUrl}">${fileName}</a>`;
-};
-
-// Convert missing lines to HTML
-const toMissingTd = (item) => {
-  if (!item.missing || item.missing === 'lines') {
-    return item.missing || '&nbsp;';
+// Get last run data from coverage directory
+const getLastRunData = (coveragePath) => {
+  if (!coveragePath || typeof coveragePath !== 'string') {
+    return null;
   }
-
-  // For SimpleCov, we typically don't have specific line numbers in HTML
-  // This would need to be enhanced if we parse XML coverage files
-  return item.missing;
-};
-
-// Main function to get coverage report from SimpleCov HTML
-const getCoverageReport = (options) => {
-  const { coveragePath } = options;
 
   try {
-    const coverageFilePath = getPathToFile(coveragePath);
-    const content = getContentFile(coverageFilePath);
-    const isValid = isValidCoverageContent(content);
+    const coverageDir = path.dirname(coveragePath);
+    const lastRunPath = path.join(coverageDir, '.last_run.json');
 
-    if (content && !isValid) {
-      core.error(
-        `Coverage file "${coverageFilePath}" has bad format or wrong data`,
-      );
-    }
-
-    if (content && isValid) {
-      const coverage = getTotalCoverage(content);
-      const html = toHtml(content, options);
-      const warnings = getWarnings(content);
-      const color = getCoverageColor(coverage);
-
-      return { html, coverage: coverage + '%', color, warnings };
-    }
+    return parseLastRun(lastRunPath);
   } catch (error) {
-    core.error(`Generating coverage report. ${error.message}`);
+    core.warning(`Failed to get last run data: ${error.message}`);
+    return null;
   }
-
-  return { html: '', coverage: '0%', color: 'red', warnings: 0 };
-};
-
-// Convert coverage data to HTML output
-const toHtml = (data, options) => {
-  const { badgeTitle, title, hideBadge, hideReport, removeLinkFromBadge } =
-    options;
-
-  const table = hideReport ? '' : toTable(data, options);
-  const total = getTotal(data);
-  const color = getCoverageColor(total ? extractPercentage(total.cover) : '0');
-  const coverage = total ? total.cover : '0%';
-
-  const badgeUrl = `https://img.shields.io/badge/${badgeTitle}-${coverage}-${color}.svg`;
-
-  const badge = hideBadge
-    ? ''
-    : removeLinkFromBadge
-    ? `<img alt="Coverage" src="${badgeUrl}" /><br/>`
-    : `<a href="${badgeUrl}"><img alt="Coverage" src="${badgeUrl}" /></a><br/>`;
-
-  const report = hideReport
-    ? ''
-    : `<details><summary>${title}</summary>${table}</details>`;
-
-  return `${badge}${report}`;
 };
 
 module.exports = {
-  getCoverageReport,
-  getTotalCoverage,
-  getTotal,
-  getWarnings,
-  parse,
-  toHtml,
-  toTable,
-  toRow,
-  toTotalRow,
-  toFileNameTd,
-  toMissingTd,
-  makeFolders,
+  parseLastRun,
+  getLastRunData,
+  generateLastRunHtml,
+  getCoverageColor,
+  getStatusEmoji,
 };
 
 
 /***/ }),
 
-/***/ 841:
+/***/ 2028:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 const core = __nccwpck_require__(7484);
@@ -40409,7 +40399,7 @@ const toHtmlFromXml = (data, options) => {
   const color = getCoverageColor(data.total);
   const coverage = data.total + '%';
 
-  const badgeUrl = `https://img.shields.io/badge/${badgeTitle}-${coverage}-${color}.svg`;
+  const badgeUrl = `https://img.shields.io/badge/${badgeTitle}-${coverage.replace('%', '%25')}-${color}.svg`;
   const badge = hideBadge
     ? ''
     : `<img alt="Coverage" src="${badgeUrl}" /><br/>`;
@@ -40529,7 +40519,325 @@ module.exports = {
 
 /***/ }),
 
-/***/ 3255:
+/***/ 9744:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+const fs = __nccwpck_require__(9896);
+const path = __nccwpck_require__(6928);
+const core = __nccwpck_require__(7484);
+
+/**
+ * Parse SimpleCov coverage.json file
+ * Based on the official SimpleCov JSON formatter format
+ * @param {string} filePath - Path to coverage.json file
+ * @param {boolean} includeFileDetails - Whether to include individual file details
+ * @returns {Object} Parsed coverage data or null if error
+ */
+function parseSimpleCov(filePath, includeFileDetails = false) {
+  try {
+    // Validate file exists
+    if (!fs.existsSync(filePath)) {
+      core.warning(`SimpleCov coverage file not found: ${filePath}`);
+      return null;
+    }
+
+    // Read and parse JSON
+    const content = fs.readFileSync(filePath, 'utf8');
+    const data = JSON.parse(content);
+
+    // Validate SimpleCov JSON structure
+    if (!validateSimpleCovData(data)) {
+      core.error(`Invalid SimpleCov JSON format in ${filePath}`);
+      return null;
+    }
+
+    // Calculate overall summary
+    const overall = calculateOverallSummary(data.files);
+
+    // Group files by directory
+    const groups = groupFilesByDirectory(data.files);
+
+    // Generate individual file data (only if requested)
+    const files = includeFileDetails ? generateFileData(data.files) : null;
+
+    return { overall, groups, files };
+  } catch (error) {
+    core.error(`Error parsing SimpleCov file ${filePath}: ${error.message}`);
+    return null;
+  }
+}
+
+/**
+ * Validate SimpleCov JSON data structure
+ * @param {Object} data - Parsed JSON data
+ * @returns {boolean} True if valid SimpleCov format
+ */
+function validateSimpleCovData(data) {
+  // Check for required top-level fields
+  if (!data || typeof data !== 'object') {
+    return false;
+  }
+
+  // Check for files array
+  if (!Array.isArray(data.files)) {
+    return false;
+  }
+
+  // Validate each file object
+  for (const file of data.files) {
+    if (!validateFileData(file)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Validate individual file data structure
+ * @param {Object} file - File coverage data
+ * @returns {boolean} True if valid file format
+ */
+function validateFileData(file) {
+  // Required fields for SimpleCov JSON format
+  const requiredFields = [
+    'filename',
+    'covered_percent',
+    'coverage',
+    'covered_lines',
+    'lines_of_code',
+  ];
+
+  for (const field of requiredFields) {
+    if (!(field in file)) {
+      return false;
+    }
+  }
+
+  // Validate coverage object
+  if (!file.coverage || typeof file.coverage !== 'object') {
+    return false;
+  }
+
+  // Validate lines array exists
+  if (!Array.isArray(file.coverage.lines)) {
+    return false;
+  }
+
+  // Validate numeric fields
+  const numericFields = ['covered_percent', 'covered_lines', 'lines_of_code'];
+  for (const field of numericFields) {
+    if (typeof file[field] !== 'number' || isNaN(file[field])) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Calculate overall summary from all files
+ * @param {Array} files - Array of file coverage data
+ * @returns {Object} Overall summary
+ */
+function calculateOverallSummary(files) {
+  let totalFiles = files.length;
+  let totalLines = 0;
+  let coveredLines = 0;
+  let totalBranches = 0;
+  let coveredBranches = 0;
+
+  files.forEach((file) => {
+    totalLines += file.lines_of_code;
+    coveredLines += file.covered_lines;
+
+    // Calculate branch coverage if available
+    if (
+      file.coverage.branches &&
+      Object.keys(file.coverage.branches).length > 0
+    ) {
+      const branchData = calculateBranchCoverage(file.coverage.branches);
+      totalBranches += branchData.total;
+      coveredBranches += branchData.covered;
+    }
+  });
+
+  return {
+    files: totalFiles,
+    lines: totalLines,
+    covered: coveredLines,
+    missed: totalLines - coveredLines,
+    percentage:
+      totalLines > 0 ? ((coveredLines / totalLines) * 100).toFixed(2) : '0.00',
+    branches:
+      totalBranches > 0
+        ? {
+            total: totalBranches,
+            covered: coveredBranches,
+            missed: totalBranches - coveredBranches,
+            percentage: ((coveredBranches / totalBranches) * 100).toFixed(2),
+          }
+        : null,
+  };
+}
+
+/**
+ * Calculate branch coverage for a file
+ * @param {Object} branches - Branch coverage data
+ * @returns {Object} Branch summary
+ */
+function calculateBranchCoverage(branches) {
+  let total = 0;
+  let covered = 0;
+
+  Object.values(branches).forEach((branchGroup) => {
+    if (typeof branchGroup === 'object' && branchGroup !== null) {
+      Object.values(branchGroup).forEach((count) => {
+        if (typeof count === 'number') {
+          total++;
+          if (count > 0) {
+            covered++;
+          }
+        }
+      });
+    }
+  });
+
+  return { total, covered };
+}
+
+/**
+ * Group files by directory (Controllers, Models, Jobs, etc.)
+ * @param {Array} files - Array of file coverage data
+ * @returns {Array} Grouped files with statistics
+ */
+function groupFilesByDirectory(files) {
+  const groups = {};
+
+  files.forEach((file) => {
+    const dir = extractDirectory(file.filename);
+    if (!groups[dir]) {
+      groups[dir] = { files: 0, lines: 0, covered: 0, missed: 0 };
+    }
+    groups[dir].files++;
+    groups[dir].lines += file.lines_of_code;
+    groups[dir].covered += file.covered_lines;
+    groups[dir].missed += file.lines_of_code - file.covered_lines;
+  });
+
+  // Convert to array and calculate percentages
+  return Object.entries(groups)
+    .map(([name, data]) => ({
+      name,
+      ...data,
+      percentage:
+        data.lines > 0 ? ((data.covered / data.lines) * 100).toFixed(1) : '0.0',
+    }))
+    .sort((a, b) => b.lines - a.lines); // Sort by line count descending
+}
+
+/**
+ * Extract directory name from file path
+ * Simple and robust directory extraction for any project structure
+ * @param {string} filePath - Full file path
+ * @returns {string} Directory name
+ */
+function extractDirectory(filePath) {
+  if (!filePath || typeof filePath !== 'string') {
+    return 'Other';
+  }
+
+  // Split path and handle both Unix and Windows separators
+  const parts = filePath.split(/[/\\]/);
+
+  // Look for common Rails/application directories
+  const appIndex = parts.findIndex((part) => part === 'app');
+  const libIndex = parts.findIndex((part) => part === 'lib');
+  const specIndex = parts.findIndex((part) => part === 'spec');
+  const testIndex = parts.findIndex((part) => part === 'test');
+
+  let dir = null;
+
+  // Extract directory after common Rails directories
+  if (appIndex !== -1 && appIndex + 1 < parts.length) {
+    dir = parts[appIndex + 1];
+  } else if (libIndex !== -1 && libIndex + 1 < parts.length) {
+    dir = parts[libIndex + 1];
+  } else if (specIndex !== -1 && specIndex + 1 < parts.length) {
+    dir = parts[specIndex + 1];
+  } else if (testIndex !== -1 && testIndex + 1 < parts.length) {
+    dir = parts[testIndex + 1];
+  } else if (parts.length >= 2) {
+    // Fallback: use second to last part (parent directory of file)
+    dir = parts[parts.length - 2];
+  }
+
+  // Capitalize first letter and return
+  if (dir) {
+    return dir.charAt(0).toUpperCase() + dir.slice(1);
+  }
+
+  return 'Other';
+}
+
+/**
+ * Generate file-level data (only when requested)
+ * @param {Array} files - Array of file coverage data
+ * @returns {Array} File details
+ */
+function generateFileData(files) {
+  return files
+    .map((file) => ({
+      name: extractFileName(file.filename),
+      path: file.filename,
+      lines: file.lines_of_code,
+      covered: file.covered_lines,
+      missed: file.lines_of_code - file.covered_lines,
+      percentage: file.covered_percent.toFixed(1),
+      missedLines: extractMissedLines(file.coverage.lines),
+    }))
+    .sort((a, b) => parseFloat(b.percentage) - parseFloat(a.percentage)); // Sort by coverage descending
+}
+
+/**
+ * Extract file name from full path
+ * @param {string} filePath - Full file path
+ * @returns {string} File name
+ */
+function extractFileName(filePath) {
+  if (!filePath || typeof filePath !== 'string') {
+    return 'unknown';
+  }
+  return path.basename(filePath);
+}
+
+/**
+ * Extract missed line numbers
+ * @param {Array} lineCoverage - Line coverage array
+ * @returns {Array} Array of missed line numbers
+ */
+function extractMissedLines(lineCoverage) {
+  if (!Array.isArray(lineCoverage)) {
+    return [];
+  }
+
+  return lineCoverage
+    .map((coverage, index) => ({ line: index + 1, coverage }))
+    .filter((line) => line.coverage === 0)
+    .map((line) => line.line);
+}
+
+module.exports = {
+  parseSimpleCov,
+  calculateOverallSummary,
+  groupFilesByDirectory,
+  generateFileData,
+};
+
+
+/***/ }),
+
+/***/ 3760:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 const core = __nccwpck_require__(7484);
@@ -40742,6 +41050,7 @@ module.exports = {
 
 const fs = __nccwpck_require__(9896);
 const path = __nccwpck_require__(6928);
+const core = __nccwpck_require__(7484);
 
 // Get the path to a file, handling both relative and absolute paths
 const getPathToFile = (filePath) => {
@@ -40765,7 +41074,7 @@ const getContentFile = (filePath) => {
   try {
     return fs.readFileSync(filePath, 'utf8');
   } catch (error) {
-    console.error(`Error reading file ${filePath}:`, error.message);
+    core.error(`Error reading file ${filePath}: ${error.message}`);
     return null;
   }
 };
@@ -42793,16 +43102,119 @@ module.exports = /*#__PURE__*/JSON.parse('[[[0,44],"disallowed_STD3_valid"],[[45
 var __webpack_exports__ = {};
 const core = __nccwpck_require__(7484);
 const github = __nccwpck_require__(3228);
-const { getCoverageReport } = __nccwpck_require__(3046);
-const { getCoverageXmlReport } = __nccwpck_require__(841);
-const {
-  getSummaryReport,
-  getParsedTestResults,
-  getNotSuccessTestInfo,
-} = __nccwpck_require__(3255);
+const ParserManager = __nccwpck_require__(3662);
 const { getMultipleReport } = __nccwpck_require__(7221);
 
 const MAX_COMMENT_LENGTH = 65536;
+
+// Get coverage color based on percentage
+const getCoverageColor = (percentage) => {
+  if (percentage >= 90) return 'brightgreen';
+  if (percentage >= 80) return 'green';
+  if (percentage >= 70) return 'yellowgreen';
+  if (percentage >= 60) return 'yellow';
+  if (percentage >= 50) return 'orange';
+  return 'red';
+};
+
+// Generate coverage summary HTML
+const generateCoverageSummary = (coverageData, options = {}) => {
+  if (!coverageData) return '';
+
+  const { overall, groups } = coverageData;
+  const { title = 'Coverage Report', hideBadge = false } = options;
+
+  let html = '## ' + title + '\n\n';
+
+  // Overall summary
+  html += '### Overall Summary\n\n';
+  html += '| Metric | Value |\n';
+  html += '|--------|-------|\n';
+  html += '| Files | ' + overall.files + ' |\n';
+  html += '| Lines | ' + overall.lines + ' |\n';
+  html += '| Covered | ' + overall.covered + ' |\n';
+  html += '| Missed | ' + overall.missed + ' |\n';
+  html += '| **Coverage** | **' + overall.percentage + '%** |\n';
+
+  if (overall.branches) {
+    html += '| **Branch Coverage** | **' + overall.branches.percentage + '%** |\n';
+  }
+
+  html += '\n';
+
+  // Group breakdown
+  if (groups && groups.length > 0) {
+    html += '### Coverage by Category\n\n';
+    html += '| Category | Files | Lines | Covered | Missed | Coverage |\n';
+    html += '|----------|-------|-------|---------|--------|----------|\n';
+    
+    groups.forEach(group => {
+      html += '| ' + group.name + ' | ' + group.files + ' | ' + group.lines + ' | ' + group.covered + ' | ' + group.missed + ' | ' + group.percentage + '% |\n';
+    });
+    
+    html += '\n';
+  }
+
+  return html;
+};
+
+// Generate file details HTML
+const generateFileDetails = (coverageData, options = {}) => {
+  if (!coverageData || !coverageData.files) return '';
+
+  const { files, filesTruncated } = coverageData;
+  const { maxFilesToShow = 50 } = options;
+
+  let html = '### File Coverage Details\n\n';
+  html += '| File | Lines | Covered | Missed | Coverage |\n';
+  html += '|------|-------|---------|--------|----------|\n';
+
+  files.forEach(file => {
+    html += '| `' + file.name + '` | ' + file.lines + ' | ' + file.covered + ' | ' + file.missed + ' | ' + file.percentage + '% |\n';
+  });
+
+  if (filesTruncated) {
+    html += '\n*Showing first ' + maxFilesToShow + ' files. Enable `include-file-details: true` to see all files.*\n';
+  }
+
+  html += '\n';
+  return html;
+};
+
+// Generate last run coverage HTML
+const generateLastRunSection = (lastRunData, options = {}) => {
+  if (!lastRunData) return '';
+  const { title = 'Last Run Coverage', hideBadge = false } = options;
+  const { line, branch } = lastRunData;
+  
+  let html = '## ' + title + '\n\n';
+  
+  if (!hideBadge) {
+    html += '![Line Coverage](https://img.shields.io/badge/Line-' + line.toFixed(1) + '%25-' + getCoverageColor(line) + ')\n';
+    html += '![Branch Coverage](https://img.shields.io/badge/Branch-' + branch.toFixed(1) + '%25-' + getCoverageColor(branch) + ')\n\n';
+  }
+  
+  html += '| Coverage Type | Percentage |\n';
+  html += '|---------------|------------|\n';
+  html += '| Line | ' + line.toFixed(1) + '% |\n';
+  html += '| Branch | ' + branch.toFixed(1) + '% |\n\n';
+  return html;
+};
+
+// Generate test results HTML
+const generateTestResultsSection = (testResults, options = {}) => {
+  if (!testResults) return '';
+  const { title = 'Test Results', tests, errors, failures, skipped, time } = testResults;
+  let html = '## ' + title + '\n\n';
+  html += '| Metric | Value |\n';
+  html += '|--------|-------|\n';
+  html += '| Tests | ' + tests + ' |\n';
+  html += '| Errors | ' + errors + ' |\n';
+  html += '| Failures | ' + failures + ' |\n';
+  html += '| Skipped | ' + skipped + ' |\n';
+  html += '| Time | ' + time + 's |\n\n';
+  return html;
+};
 
 // Create or edit a comment on a PR
 const createOrEditComment = async (
@@ -42841,27 +43253,6 @@ const createOrEditComment = async (
   }
 };
 
-// Get changed files for the PR
-const getChangedFiles = async (options, pr_number) => {
-  if (!pr_number) {
-    return null;
-  }
-
-  try {
-    const octokit = github.getOctokit(options.token);
-    const { data: files } = await octokit.pulls.listFiles({
-      repo: options.repository.split('/')[1],
-      owner: options.repository.split('/')[0],
-      pull_number: parseInt(pr_number),
-    });
-
-    return files.map((file) => file.filename);
-  } catch (error) {
-    core.error(`Error getting changed files: ${error.message}`);
-    return null;
-  }
-};
-
 // Main function
 const main = async () => {
   const token = core.getInput('github-token', { required: true });
@@ -42869,171 +43260,108 @@ const main = async () => {
   const badgeTitle = core.getInput('badge-title', { required: false });
   const hideBadge = core.getBooleanInput('hide-badge', { required: false });
   const hideReport = core.getBooleanInput('hide-report', { required: false });
-  const createNewComment = core.getBooleanInput('create-new-comment', {
-    required: false,
-  });
-  const hideComment = core.getBooleanInput('hide-comment', { required: false });
-  const xmlSkipCovered = core.getBooleanInput('xml-skip-covered', {
-    required: false,
-  });
-  const reportOnlyChangedFiles = core.getBooleanInput(
-    'report-only-changed-files',
-    { required: false },
-  );
-  const removeLinkFromBadge = core.getBooleanInput('remove-link-from-badge', {
-    required: false,
-  });
-  const uniqueIdForComment = core.getInput('unique-id-for-comment', {
-    required: false,
-  });
-  const defaultBranch = core.getInput('default-branch', { required: false });
-  const coveragePath = core.getInput('coverage-path', { required: false });
+  const coverageFile = core.getInput('coverage-file', { required: false });
+  const includeFileDetails = core.getBooleanInput('include-file-details', { required: false });
+  const maxFilesToShow = parseInt(core.getInput('max-files-to-show', { required: false })) || 50;
+  const includeLastRun = core.getBooleanInput('include-last-run', { required: false });
+  const lastRunTitle = core.getInput('last-run-title', { required: false }) || 'Last Run Coverage';
+  const testResultsPath = core.getInput('test-results-path', { required: false });
+  const testResultsTitle = core.getInput('test-results-title', { required: false }) || 'Test Results';
   const issueNumberInput = core.getInput('issue-number', { required: false });
-  const coverageXmlPath = core.getInput('coverage-xml-path', {
-    required: false,
-  });
-  const pathPrefix = core.getInput('coverage-path-prefix', { required: false });
-  const testResultsPath = core.getInput('test-results-path', {
-    required: false,
-  });
-  const testResultsTitle = core.getInput('test-results-title', {
-    required: false,
-  });
-  const multipleFiles = core.getMultilineInput('multiple-files', {
-    required: false,
-  });
+  const hideComment = core.getBooleanInput('hide-comment', { required: false });
+  const createNewComment = core.getBooleanInput('create-new-comment', { required: false });
+  const uniqueIdForComment = core.getInput('unique-id-for-comment', { required: false });
+  const multipleFiles = core.getMultilineInput('multiple-files', { required: false });
 
   const { context, repository } = github;
   const { repo, owner } = context.repo;
   const { eventName, payload } = context;
-  const watermarkUniqueId = uniqueIdForComment
-    ? `| ${uniqueIdForComment} `
-    : '';
-  const WATERMARK = `<!-- Rails Coverage Comment: ${context.job} ${watermarkUniqueId}-->\n`;
+  const watermarkUniqueId = uniqueIdForComment ? '| ' + uniqueIdForComment + ' ' : '';
+  const WATERMARK = '<!-- Rails Coverage Comment: ' + context.job + ' ' + watermarkUniqueId + '-->\n';
   let finalHtml = '';
 
-  const options = {
-    token,
-    repository: repository || `${owner}/${repo}`,
-    prefix: `${process.env.GITHUB_WORKSPACE}/`,
-    pathPrefix,
-    coveragePath,
-    coverageXmlPath,
-    testResultsPath,
-    title,
-    badgeTitle,
-    hideBadge,
-    hideReport,
-    createNewComment,
-    hideComment,
-    xmlSkipCovered,
-    reportOnlyChangedFiles,
-    removeLinkFromBadge,
-    defaultBranch,
-    testResultsTitle,
-    multipleFiles,
-  };
+  // Initialize parser manager and parse all available data
+  const parserManager = new ParserManager();
+  const parsedData = parserManager.autoDetectAndParse({
+    coverageFile: coverageFile,
+    includeFileDetails: includeFileDetails,
+    maxFilesToShow: maxFilesToShow,
+    lastRunFile: 'coverage/.last_run.json',
+    testResultsFile: testResultsPath || 'test-results.xml',
+  });
 
-  options.repoUrl =
-    payload.repository?.html_url || `https://github.com/${options.repository}`;
-
-  // Set commit and branch information based on event type
-  if (eventName === 'pull_request' || eventName === 'pull_request_target') {
-    options.commit = payload.pull_request.head.sha;
-    options.head = payload.pull_request.head.ref;
-    options.base = payload.pull_request.base.ref;
-  } else if (eventName === 'push') {
-    options.commit = payload.after;
-    options.head = context.ref;
-  } else if (eventName === 'workflow_dispatch') {
-    options.commit = context.sha;
-    options.head = context.ref;
-  } else if (eventName === 'workflow_run') {
-    options.commit = payload.workflow_run.head_sha;
-    options.head = payload.workflow_run.head_branch;
-  }
-
-  // Get changed files if requested
-  if (options.reportOnlyChangedFiles) {
-    const changedFiles = await getChangedFiles(options, issueNumberInput);
-    options.changedFiles = changedFiles;
-
-    // If we can't get changed files, disable the feature
-    if (!changedFiles) {
-      options.reportOnlyChangedFiles = false;
+  // Generate coverage section
+  let coverageHtml = '';
+  if (parsedData.coverage && !hideReport) {
+    coverageHtml = generateCoverageSummary(parsedData.coverage, {
+      title: title,
+      hideBadge: hideBadge,
+    });
+    // Add file details if requested
+    if (includeFileDetails && parsedData.coverage.files) {
+      coverageHtml += generateFileDetails(parsedData.coverage, {
+        maxFilesToShow: maxFilesToShow,
+      });
     }
+    // Set coverage outputs
+    const { overall } = parsedData.coverage;
+    core.setOutput('coverage', overall.percentage + '%');
+    core.setOutput('color', getCoverageColor(parseFloat(overall.percentage)));
+    core.setOutput('warnings', '0');
   }
 
-  // Generate coverage report
-  let report;
-  if (options.coverageXmlPath) {
-    report = await getCoverageXmlReport(options);
-  } else {
-    report = getCoverageReport(options);
+  // Generate last run section
+  let lastRunHtml = '';
+  if (includeLastRun && parsedData.lastRun) {
+    lastRunHtml = generateLastRunSection(parsedData.lastRun, { 
+      title: lastRunTitle,
+      hideBadge: hideBadge 
+    });
+    core.setOutput('line-coverage', parsedData.lastRun.line.toFixed(1) + '%');
+    core.setOutput('branch-coverage', parsedData.lastRun.branch.toFixed(1) + '%');
   }
 
-  const { coverage, color, html, warnings } = report;
-  const summaryReport = await getSummaryReport(options);
-
-  // Set outputs
-  core.setOutput('coverage', coverage);
-  core.setOutput('color', color);
-  core.setOutput('warnings', warnings);
-
-  if (summaryReport) {
-    core.setOutput('summaryReport', summaryReport);
-  }
-
-  if (html) {
-    const newOptions = { ...options, commit: defaultBranch };
-    const output = getCoverageReport(newOptions);
-    core.setOutput('coverageHtml', output.html);
-  }
-
-  // Set test results outputs
-  if (testResultsPath) {
-    const parsedResults = await getParsedTestResults(options);
-    const { errors, failures, skipped, tests, time } = parsedResults;
+  // Generate test results section
+  let testResultsHtml = '';
+  if (parsedData.testResults) {
+    testResultsHtml = generateTestResultsSection(parsedData.testResults, { title: testResultsTitle });
+    // Set test results outputs
+    const { errors, failures, skipped, tests, time } = parsedData.testResults;
     const valuesToExport = { errors, failures, skipped, tests, time };
-
     Object.entries(valuesToExport).forEach(([key, value]) => {
-      core.info(`${key}: ${value}`);
+      core.info(key + ': ' + value);
       core.setOutput(key, value);
     });
-
-    const notSuccessTestInfo = await getNotSuccessTestInfo(options);
-    core.setOutput('notSuccessTestInfo', JSON.stringify(notSuccessTestInfo));
   }
 
-  // Handle multiple files
+  // Handle multiple files (legacy support)
   let multipleFilesHtml = '';
   if (multipleFiles && multipleFiles.length) {
-    multipleFilesHtml = `\n\n${getMultipleReport(options)}`;
+    const options = {
+      token,
+      repository: repository || owner + '/' + repo,
+      prefix: process.env.GITHUB_WORKSPACE + '/',
+      multipleFiles,
+    };
+    multipleFilesHtml = '\n\n' + getMultipleReport(options);
   }
 
   // Check comment length
-  if (
-    !options.hideReport &&
-    html.length + summaryReport.length > MAX_COMMENT_LENGTH &&
-    eventName !== 'workflow_dispatch' &&
-    eventName !== 'workflow_run'
-  ) {
+  const totalLength = coverageHtml.length + lastRunHtml.length + testResultsHtml.length + multipleFilesHtml.length;
+  if (totalLength > MAX_COMMENT_LENGTH && eventName !== 'workflow_dispatch' && eventName !== 'workflow_run') {
     core.warning(
-      `Your comment is too long (maximum is ${MAX_COMMENT_LENGTH} characters), coverage report will not be added.`,
+      'Your comment is too long (maximum is ' + MAX_COMMENT_LENGTH + ' characters), some sections will be truncated.',
     );
     core.warning(
-      `Try adding "hide-report: true" or "report-only-changed-files: true", or switch to "multiple-files" mode`,
+      'Try adding "hide-report: true" or "include-file-details: false" to reduce comment size.',
     );
-    report = { ...report, html: '' };
   }
 
-  // Build final comment
-  if (!options.hideComment) {
-    finalHtml = WATERMARK + html + summaryReport + multipleFilesHtml;
-  }
+  // Combine all sections
+  finalHtml = WATERMARK + coverageHtml + testResultsHtml + lastRunHtml + multipleFilesHtml;
 
   // Post comment if not hidden
-  if (!options.hideComment && finalHtml) {
+  if (!hideComment && finalHtml) {
     const octokit = github.getOctokit(token);
     const issue_number =
       issueNumberInput || payload.pull_request?.number || payload.issue?.number;
@@ -43045,7 +43373,7 @@ const main = async () => {
       return;
     }
 
-    if (options.createNewComment) {
+    if (createNewComment) {
       core.info('Creating new comment');
       await octokit.issues.createComment({
         repo,
@@ -43066,13 +43394,16 @@ const main = async () => {
   }
 
   core.info('Rails Coverage Comment action completed successfully');
+  core.info('Coverage HTML: ' + coverageHtml);
+  if (lastRunHtml) core.info('Last Run HTML: ' + lastRunHtml);
+  if (testResultsHtml) core.info('Test Results HTML: ' + testResultsHtml);
+  if (multipleFilesHtml) core.info('Multiple Files HTML: ' + multipleFilesHtml);
 };
 
 // Run the main function
 main().catch((error) => {
   core.setFailed(error.message);
-});
-
+}); 
 module.exports = __webpack_exports__;
 /******/ })()
 ;

@@ -1,7 +1,7 @@
 const core = require('@actions/core');
-const { getCoverageReport } = require('./parse');
-const { getCoverageXmlReport } = require('./parseXml');
-const { getSummaryReport } = require('./testResults');
+const ParserManager = require('./parsers');
+const { getCoverageXmlReport } = require('./parsers/parseXml');
+const { getSummaryReport } = require('./parsers/testResults');
 
 // Get multiple reports from different files
 const getMultipleReport = (options) => {
@@ -21,7 +21,7 @@ const getMultipleReport = (options) => {
       const title = parts[0];
       const coveragePath = parts[1];
 
-      const report = generateSingleReport({
+      const report = generateSingleReportAsync({
         ...options,
         coveragePath,
         title,
@@ -36,20 +36,29 @@ const getMultipleReport = (options) => {
 };
 
 // Generate a single report for multiple files
-const generateSingleReport = (options) => {
+const generateSingleReportAsync = async (options) => {
   const { coveragePath, coverageXmlPath } = options;
-
   try {
     let report;
-
     if (coverageXmlPath) {
-      report = getCoverageXmlReport(options);
+      report = await getCoverageXmlReport(options);
     } else {
-      report = getCoverageReport(options);
+      // Use ParserManager for JSON coverage
+      const parserManager = new ParserManager();
+      const parsed = await parserManager.autoDetectAndParse({
+        coverageFile: coveragePath,
+        includeFileDetails: false,
+      });
+      if (parsed.coverage && parsed.coverage.overall) {
+        report = {
+          coverage: parsed.coverage.overall.percentage + '%',
+          color: getStatusColor(parsed.coverage.overall.percentage),
+        };
+      } else {
+        report = { coverage: '0%', color: 'red' };
+      }
     }
-
     const summaryReport = getSummaryReport(options);
-
     return {
       coverage: report.coverage,
       color: report.color,
@@ -63,6 +72,17 @@ const generateSingleReport = (options) => {
       summary: '',
     };
   }
+};
+
+// Helper to get color for status badge
+const getStatusColor = (percentage) => {
+  const pct = parseFloat(percentage);
+  if (pct >= 90) return 'brightgreen';
+  if (pct >= 80) return 'green';
+  if (pct >= 70) return 'yellowgreen';
+  if (pct >= 60) return 'yellow';
+  if (pct >= 50) return 'orange';
+  return 'red';
 };
 
 // Convert multiple report to table row
@@ -80,7 +100,7 @@ const toMultiRow = (title, report) => {
 
   const status = getStatusFromReport(report);
 
-  return `<tr><td>${title}</td><td><img alt="Coverage" src="https://img.shields.io/badge/Coverage-${coverage}-${color}.svg" /></td><td>${testInfo}</td><td>${status}</td></tr>`;
+  return `<tr><td>${title}</td><td><img alt="Coverage" src="https://img.shields.io/badge/Coverage-${coverage.replace('%', '%25')}-${color}.svg" /></td><td>${testInfo}</td><td>${status}</td></tr>`;
 };
 
 // Get status from report
@@ -101,7 +121,7 @@ const getStatusFromReport = (report) => {
 
 module.exports = {
   getMultipleReport,
-  generateSingleReport,
+  generateSingleReportAsync,
   toMultiRow,
   getStatusFromReport,
 };
