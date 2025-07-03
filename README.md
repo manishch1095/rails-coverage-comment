@@ -1,5 +1,7 @@
 # Rails Coverage Comment
 
+<!-- Test PR comment functionality -->
+
 ![license](https://img.shields.io/github/license/manishchauhan/rails-coverage-comment)
 ![version](https://img.shields.io/github/package-json/v/manishchauhan/rails-coverage-comment)
 
@@ -17,6 +19,7 @@ This GitHub Action comments a pull request with a HTML test coverage report base
 - 🔄 **Comment Updates**: Updates existing comments instead of creating new ones
 - 📁 **Multiple Reports**: Support for multiple coverage reports in monorepos
 - 📄 **Multiple Formats**: Support for both HTML and XML coverage reports
+- ✨ **Clean Code**: Well-tested and lint-free implementation
 
 ## Quick Start
 
@@ -286,3 +289,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - Inspired by [pytest-coverage-comment](https://github.com/MishaKav/pytest-coverage-comment)
 - Built for the Rails community 
+
+<!-- Test PR comment generation --> 
