@@ -217,7 +217,7 @@ const toHtml = (data, options) => {
   const color = getCoverageColor(total ? extractPercentage(total.cover) : '0');
   const coverage = total ? total.cover : '0%';
 
-  const badgeUrl = `https://img.shields.io/badge/${badgeTitle}-${coverage}-${color}.svg`;
+  const badgeUrl = `https://img.shields.io/badge/${badgeTitle}-${coverage.replace('%', '%25')}-${color}.svg`;
 
   const badge = hideBadge
     ? ''

@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const core = require('@actions/core');
 
 // Get the path to a file, handling both relative and absolute paths
 const getPathToFile = (filePath) => {
@@ -23,7 +24,7 @@ const getContentFile = (filePath) => {
   try {
     return fs.readFileSync(filePath, 'utf8');
   } catch (error) {
-    console.error(`Error reading file ${filePath}:`, error.message);
+    core.error(`Error reading file ${filePath}: ${error.message}`);
     return null;
   }
 };

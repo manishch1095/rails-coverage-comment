@@ -39900,6 +39900,111 @@ function wrappy (fn, cb) {
 
 /***/ }),
 
+/***/ 3156:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+const fs = __nccwpck_require__(9896);
+const path = __nccwpck_require__(6928);
+const core = __nccwpck_require__(7484);
+
+// Parse SimpleCov .last_run.json file
+const parseLastRun = (filePath) => {
+  try {
+    if (!fs.existsSync(filePath)) {
+      return null;
+    }
+
+    const content = fs.readFileSync(filePath, 'utf8');
+    const data = JSON.parse(content);
+
+    if (!data.result) {
+      return null;
+    }
+
+    return {
+      line: data.result.line || 0,
+      branch: data.result.branch || 0,
+    };
+  } catch (error) {
+    core.warning(`Failed to parse .last_run.json: ${error.message}`);
+    return null;
+  }
+};
+
+// Get coverage color based on percentage
+const getCoverageColor = (percentage) => {
+  if (percentage >= 90) return 'brightgreen';
+  if (percentage >= 80) return 'green';
+  if (percentage >= 70) return 'yellowgreen';
+  if (percentage >= 60) return 'yellow';
+  if (percentage >= 50) return 'orange';
+  return 'red';
+};
+
+// Generate HTML for last run coverage
+const generateLastRunHtml = (lastRunData, options = {}) => {
+  if (!lastRunData) {
+    return '';
+  }
+
+  const { title = 'Last Run Coverage', hideBadge = false } = options;
+
+  const lineColor = getCoverageColor(lastRunData.line);
+  const branchColor = getCoverageColor(lastRunData.branch);
+
+  const lineBadge = `https://img.shields.io/badge/Line-${lastRunData.line.toFixed(1)}%25-${lineColor}.svg`;
+  const branchBadge = `https://img.shields.io/badge/Branch-${lastRunData.branch.toFixed(1)}%25-${branchColor}.svg`;
+
+  const badges = hideBadge
+    ? ''
+    : `<img alt="Line Coverage" src="${lineBadge}" /> <img alt="Branch Coverage" src="${branchBadge}" /><br/>`;
+
+  const table = `
+<table>
+<tr><th>Coverage Type</th><th>Percentage</th><th>Status</th></tr>
+<tr><td>Line Coverage</td><td>${lastRunData.line.toFixed(1)}%</td><td>${getStatusEmoji(lastRunData.line)}</td></tr>
+<tr><td>Branch Coverage</td><td>${lastRunData.branch.toFixed(1)}%</td><td>${getStatusEmoji(lastRunData.branch)}</td></tr>
+</table>`;
+
+  return `<details><summary>${title}</summary>${badges}${table}</details>`;
+};
+
+// Get status emoji based on coverage percentage
+const getStatusEmoji = (percentage) => {
+  if (percentage >= 90) return '🟢 Excellent';
+  if (percentage >= 80) return '🟡 Good';
+  if (percentage >= 70) return '🟠 Fair';
+  return '🔴 Poor';
+};
+
+// Get last run data from coverage directory
+const getLastRunData = (coveragePath) => {
+  if (!coveragePath || typeof coveragePath !== 'string') {
+    return null;
+  }
+
+  try {
+    const coverageDir = path.dirname(coveragePath);
+    const lastRunPath = path.join(coverageDir, '.last_run.json');
+
+    return parseLastRun(lastRunPath);
+  } catch (error) {
+    core.warning(`Failed to get last run data: ${error.message}`);
+    return null;
+  }
+};
+
+module.exports = {
+  parseLastRun,
+  getLastRunData,
+  generateLastRunHtml,
+  getCoverageColor,
+  getStatusEmoji,
+};
+
+
+/***/ }),
+
 /***/ 7221:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
@@ -39985,7 +40090,7 @@ const toMultiRow = (title, report) => {
 
   const status = getStatusFromReport(report);
 
-  return `<tr><td>${title}</td><td><img alt="Coverage" src="https://img.shields.io/badge/Coverage-${coverage}-${color}.svg" /></td><td>${testInfo}</td><td>${status}</td></tr>`;
+  return `<tr><td>${title}</td><td><img alt="Coverage" src="https://img.shields.io/badge/Coverage-${coverage.replace('%', '%25')}-${color}.svg" /></td><td>${testInfo}</td><td>${status}</td></tr>`;
 };
 
 // Get status from report
@@ -40236,13 +40341,13 @@ const toHtml = (data, options) => {
   const color = getCoverageColor(total ? extractPercentage(total.cover) : '0');
   const coverage = total ? total.cover : '0%';
 
-  const badgeUrl = `https://img.shields.io/badge/${badgeTitle}-${coverage}-${color}.svg`;
+  const badgeUrl = `https://img.shields.io/badge/${badgeTitle}-${coverage.replace('%', '%25')}-${color}.svg`;
 
   const badge = hideBadge
     ? ''
     : removeLinkFromBadge
-    ? `<img alt="Coverage" src="${badgeUrl}" /><br/>`
-    : `<a href="${badgeUrl}"><img alt="Coverage" src="${badgeUrl}" /></a><br/>`;
+      ? `<img alt="Coverage" src="${badgeUrl}" /><br/>`
+      : `<a href="${badgeUrl}"><img alt="Coverage" src="${badgeUrl}" /></a><br/>`;
 
   const report = hideReport
     ? ''
@@ -40409,7 +40514,7 @@ const toHtmlFromXml = (data, options) => {
   const color = getCoverageColor(data.total);
   const coverage = data.total + '%';
 
-  const badgeUrl = `https://img.shields.io/badge/${badgeTitle}-${coverage}-${color}.svg`;
+  const badgeUrl = `https://img.shields.io/badge/${badgeTitle}-${coverage.replace('%', '%25')}-${color}.svg`;
   const badge = hideBadge
     ? ''
     : `<img alt="Coverage" src="${badgeUrl}" /><br/>`;
@@ -40742,6 +40847,7 @@ module.exports = {
 
 const fs = __nccwpck_require__(9896);
 const path = __nccwpck_require__(6928);
+const core = __nccwpck_require__(7484);
 
 // Get the path to a file, handling both relative and absolute paths
 const getPathToFile = (filePath) => {
@@ -40765,7 +40871,7 @@ const getContentFile = (filePath) => {
   try {
     return fs.readFileSync(filePath, 'utf8');
   } catch (error) {
-    console.error(`Error reading file ${filePath}:`, error.message);
+    core.error(`Error reading file ${filePath}: ${error.message}`);
     return null;
   }
 };
@@ -42801,6 +42907,7 @@ const {
   getNotSuccessTestInfo,
 } = __nccwpck_require__(3255);
 const { getMultipleReport } = __nccwpck_require__(7221);
+const { getLastRunData, generateLastRunHtml } = __nccwpck_require__(3156);
 
 const MAX_COMMENT_LENGTH = 65536;
 
@@ -42902,6 +43009,12 @@ const main = async () => {
   const multipleFiles = core.getMultilineInput('multiple-files', {
     required: false,
   });
+  const includeLastRun = core.getBooleanInput('include-last-run', {
+    required: false,
+  });
+  const lastRunTitle = core.getInput('last-run-title', {
+    required: false,
+  });
 
   const { context, repository } = github;
   const { repo, owner } = context.repo;
@@ -42975,6 +43088,22 @@ const main = async () => {
   const { coverage, color, html, warnings } = report;
   const summaryReport = await getSummaryReport(options);
 
+  // Get last run data if requested
+  let lastRunHtml = '';
+  if (includeLastRun) {
+    const lastRunData = getLastRunData(coveragePath);
+    if (lastRunData) {
+      lastRunHtml = generateLastRunHtml(lastRunData, {
+        title: lastRunTitle || 'Last Run Coverage',
+        hideBadge: hideBadge,
+      });
+
+      // Set last run outputs
+      core.setOutput('line-coverage', lastRunData.line.toFixed(1) + '%');
+      core.setOutput('branch-coverage', lastRunData.branch.toFixed(1) + '%');
+    }
+  }
+
   // Set outputs
   core.setOutput('coverage', coverage);
   core.setOutput('color', color);
@@ -43029,7 +43158,8 @@ const main = async () => {
 
   // Build final comment
   if (!options.hideComment) {
-    finalHtml = WATERMARK + html + summaryReport + multipleFilesHtml;
+    finalHtml =
+      WATERMARK + html + summaryReport + lastRunHtml + multipleFilesHtml;
   }
 
   // Post comment if not hidden

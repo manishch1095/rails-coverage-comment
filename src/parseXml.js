@@ -135,7 +135,7 @@ const toHtmlFromXml = (data, options) => {
   const color = getCoverageColor(data.total);
   const coverage = data.total + '%';
 
-  const badgeUrl = `https://img.shields.io/badge/${badgeTitle}-${coverage}-${color}.svg`;
+  const badgeUrl = `https://img.shields.io/badge/${badgeTitle}-${coverage.replace('%', '%25')}-${color}.svg`;
   const badge = hideBadge
     ? ''
     : `<img alt="Coverage" src="${badgeUrl}" /><br/>`;

@@ -34,8 +34,10 @@ jobs:
       - name: Build action
         run: npm run build
 
-      - name: Test action with sample data
+      - name: Test action with sample data (includes .last_run.json)
         uses: ./
         with:
           coverage-path: ./test-data/coverage/index.html
-          test-results-path: ./test-data/test-results.xml 
+          test-results-path: ./test-data/test-results.xml
+          include-last-run: true
+          last-run-title: 'SimpleCov Coverage Metrics' 

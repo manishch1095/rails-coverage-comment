@@ -8,6 +8,7 @@ const {
   getNotSuccessTestInfo,
 } = require('./testResults');
 const { getMultipleReport } = require('./multiFiles');
+const { getLastRunData, generateLastRunHtml } = require('./lastRun');
 
 const MAX_COMMENT_LENGTH = 65536;
 
@@ -109,6 +110,12 @@ const main = async () => {
   const multipleFiles = core.getMultilineInput('multiple-files', {
     required: false,
   });
+  const includeLastRun = core.getBooleanInput('include-last-run', {
+    required: false,
+  });
+  const lastRunTitle = core.getInput('last-run-title', {
+    required: false,
+  });
 
   const { context, repository } = github;
   const { repo, owner } = context.repo;
@@ -182,6 +189,22 @@ const main = async () => {
   const { coverage, color, html, warnings } = report;
   const summaryReport = await getSummaryReport(options);
 
+  // Get last run data if requested
+  let lastRunHtml = '';
+  if (includeLastRun) {
+    const lastRunData = getLastRunData(coveragePath);
+    if (lastRunData) {
+      lastRunHtml = generateLastRunHtml(lastRunData, {
+        title: lastRunTitle || 'Last Run Coverage',
+        hideBadge: hideBadge,
+      });
+
+      // Set last run outputs
+      core.setOutput('line-coverage', lastRunData.line.toFixed(1) + '%');
+      core.setOutput('branch-coverage', lastRunData.branch.toFixed(1) + '%');
+    }
+  }
+
   // Set outputs
   core.setOutput('coverage', coverage);
   core.setOutput('color', color);
@@ -236,7 +259,8 @@ const main = async () => {
 
   // Build final comment
   if (!options.hideComment) {
-    finalHtml = WATERMARK + html + summaryReport + multipleFilesHtml;
+    finalHtml =
+      WATERMARK + html + summaryReport + lastRunHtml + multipleFilesHtml;
   }
 
   // Post comment if not hidden
