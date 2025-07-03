@@ -1,5 +1,5 @@
 const core = require('@actions/core');
-const { getCoverageReport } = require('./parse');
+const ParserManager = require('./parsers');
 const { getCoverageXmlReport } = require('./parseXml');
 const { getSummaryReport } = require('./testResults');
 
@@ -45,7 +45,20 @@ const generateSingleReport = (options) => {
     if (coverageXmlPath) {
       report = getCoverageXmlReport(options);
     } else {
-      report = getCoverageReport(options);
+      // Use ParserManager for JSON coverage
+      const parserManager = new ParserManager();
+      const parsed = parserManager.autoDetectAndParse({
+        coverageFile: coveragePath,
+        includeFileDetails: false,
+      });
+      if (parsed.coverage && parsed.coverage.overall) {
+        report = {
+          coverage: parsed.coverage.overall.percentage + '%',
+          color: getStatusColor(parsed.coverage.overall.percentage),
+        };
+      } else {
+        report = { coverage: '0%', color: 'red' };
+      }
     }
 
     const summaryReport = getSummaryReport(options);
@@ -63,6 +76,17 @@ const generateSingleReport = (options) => {
       summary: '',
     };
   }
+};
+
+// Helper to get color for status badge
+const getStatusColor = (percentage) => {
+  const pct = parseFloat(percentage);
+  if (pct >= 90) return 'brightgreen';
+  if (pct >= 80) return 'green';
+  if (pct >= 70) return 'yellowgreen';
+  if (pct >= 60) return 'yellow';
+  if (pct >= 50) return 'orange';
+  return 'red';
 };
 
 // Convert multiple report to table row

@@ -39904,7 +39904,7 @@ function wrappy (fn, cb) {
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 const core = __nccwpck_require__(7484);
-const { getCoverageReport } = __nccwpck_require__(9469);
+const ParserManager = __nccwpck_require__(3662);
 const { getCoverageXmlReport } = __nccwpck_require__(2228);
 const { getSummaryReport } = __nccwpck_require__(2558);
 
@@ -39950,7 +39950,20 @@ const generateSingleReport = (options) => {
     if (coverageXmlPath) {
       report = getCoverageXmlReport(options);
     } else {
-      report = getCoverageReport(options);
+      // Use ParserManager for JSON coverage
+      const parserManager = new ParserManager();
+      const parsed = parserManager.autoDetectAndParse({
+        coverageFile: coveragePath,
+        includeFileDetails: false,
+      });
+      if (parsed.coverage && parsed.coverage.overall) {
+        report = {
+          coverage: parsed.coverage.overall.percentage + '%',
+          color: getStatusColor(parsed.coverage.overall.percentage),
+        };
+      } else {
+        report = { coverage: '0%', color: 'red' };
+      }
     }
 
     const summaryReport = getSummaryReport(options);
@@ -39968,6 +39981,17 @@ const generateSingleReport = (options) => {
       summary: '',
     };
   }
+};
+
+// Helper to get color for status badge
+const getStatusColor = (percentage) => {
+  const pct = parseFloat(percentage);
+  if (pct >= 90) return 'brightgreen';
+  if (pct >= 80) return 'green';
+  if (pct >= 70) return 'yellowgreen';
+  if (pct >= 60) return 'yellow';
+  if (pct >= 50) return 'orange';
+  return 'red';
 };
 
 // Convert multiple report to table row
@@ -40018,7 +40042,6 @@ module.exports = {
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 const fs = __nccwpck_require__(9896);
-const path = __nccwpck_require__(6928);
 
 // Import existing parsers
 const { parseLastRun } = __nccwpck_require__(5975);
@@ -40095,10 +40118,17 @@ class ParserManager {
 
     if (fs.existsSync(coverageFile)) {
       results.coverage = this.parseSimpleCov(coverageFile, includeFileDetails);
-      
+
       // Limit file details if too many files
-      if (results.coverage && results.coverage.files && results.coverage.files.length > maxFilesToShow) {
-        results.coverage.files = results.coverage.files.slice(0, maxFilesToShow);
+      if (
+        results.coverage &&
+        results.coverage.files &&
+        results.coverage.files.length > maxFilesToShow
+      ) {
+        results.coverage.files = results.coverage.files.slice(
+          0,
+          maxFilesToShow,
+        );
         results.coverage.filesTruncated = true;
       }
     }
@@ -40119,7 +40149,8 @@ class ParserManager {
   }
 }
 
-module.exports = ParserManager; 
+module.exports = ParserManager;
+
 
 /***/ }),
 
@@ -40522,13 +40553,13 @@ function parseSimpleCov(filePath, includeFileDetails = false) {
 
     // Calculate overall summary
     const overall = calculateOverallSummary(data.files);
-    
+
     // Group files by directory
     const groups = groupFilesByDirectory(data.files);
-    
+
     // Generate individual file data (only if requested)
     const files = includeFileDetails ? generateFileData(data.files) : null;
-    
+
     return { overall, groups, files };
   } catch (error) {
     core.error(`Error parsing SimpleCov file ${filePath}: ${error.message}`);
@@ -40569,8 +40600,14 @@ function validateSimpleCovData(data) {
  */
 function validateFileData(file) {
   // Required fields for SimpleCov JSON format
-  const requiredFields = ['filename', 'covered_percent', 'coverage', 'covered_lines', 'lines_of_code'];
-  
+  const requiredFields = [
+    'filename',
+    'covered_percent',
+    'coverage',
+    'covered_lines',
+    'lines_of_code',
+  ];
+
   for (const field of requiredFields) {
     if (!(field in file)) {
       return false;
@@ -40609,31 +40646,38 @@ function calculateOverallSummary(files) {
   let coveredLines = 0;
   let totalBranches = 0;
   let coveredBranches = 0;
-  
-  files.forEach(file => {
+
+  files.forEach((file) => {
     totalLines += file.lines_of_code;
     coveredLines += file.covered_lines;
-    
+
     // Calculate branch coverage if available
-    if (file.coverage.branches && Object.keys(file.coverage.branches).length > 0) {
+    if (
+      file.coverage.branches &&
+      Object.keys(file.coverage.branches).length > 0
+    ) {
       const branchData = calculateBranchCoverage(file.coverage.branches);
       totalBranches += branchData.total;
       coveredBranches += branchData.covered;
     }
   });
-  
+
   return {
     files: totalFiles,
     lines: totalLines,
     covered: coveredLines,
     missed: totalLines - coveredLines,
-    percentage: totalLines > 0 ? (coveredLines / totalLines * 100).toFixed(2) : '0.00',
-    branches: totalBranches > 0 ? {
-      total: totalBranches,
-      covered: coveredBranches,
-      missed: totalBranches - coveredBranches,
-      percentage: (coveredBranches / totalBranches * 100).toFixed(2)
-    } : null
+    percentage:
+      totalLines > 0 ? ((coveredLines / totalLines) * 100).toFixed(2) : '0.00',
+    branches:
+      totalBranches > 0
+        ? {
+            total: totalBranches,
+            covered: coveredBranches,
+            missed: totalBranches - coveredBranches,
+            percentage: ((coveredBranches / totalBranches) * 100).toFixed(2),
+          }
+        : null,
   };
 }
 
@@ -40645,10 +40689,10 @@ function calculateOverallSummary(files) {
 function calculateBranchCoverage(branches) {
   let total = 0;
   let covered = 0;
-  
-  Object.values(branches).forEach(branchGroup => {
+
+  Object.values(branches).forEach((branchGroup) => {
     if (typeof branchGroup === 'object' && branchGroup !== null) {
-      Object.values(branchGroup).forEach(count => {
+      Object.values(branchGroup).forEach((count) => {
         if (typeof count === 'number') {
           total++;
           if (count > 0) {
@@ -40658,7 +40702,7 @@ function calculateBranchCoverage(branches) {
       });
     }
   });
-  
+
   return { total, covered };
 }
 
@@ -40669,8 +40713,8 @@ function calculateBranchCoverage(branches) {
  */
 function groupFilesByDirectory(files) {
   const groups = {};
-  
-  files.forEach(file => {
+
+  files.forEach((file) => {
     const dir = extractDirectory(file.filename);
     if (!groups[dir]) {
       groups[dir] = { files: 0, lines: 0, covered: 0, missed: 0 };
@@ -40678,15 +40722,16 @@ function groupFilesByDirectory(files) {
     groups[dir].files++;
     groups[dir].lines += file.lines_of_code;
     groups[dir].covered += file.covered_lines;
-    groups[dir].missed += (file.lines_of_code - file.covered_lines);
+    groups[dir].missed += file.lines_of_code - file.covered_lines;
   });
-  
+
   // Convert to array and calculate percentages
   return Object.entries(groups)
     .map(([name, data]) => ({
       name,
       ...data,
-      percentage: data.lines > 0 ? (data.covered / data.lines * 100).toFixed(1) : '0.0'
+      percentage:
+        data.lines > 0 ? ((data.covered / data.lines) * 100).toFixed(1) : '0.0',
     }))
     .sort((a, b) => b.lines - a.lines); // Sort by line count descending
 }
@@ -40703,16 +40748,16 @@ function extractDirectory(filePath) {
   }
 
   // Split path and handle both Unix and Windows separators
-  const parts = filePath.split(/[\/\\]/);
-  
+  const parts = filePath.split(/[/\\]/);
+
   // Look for common Rails/application directories
-  const appIndex = parts.findIndex(part => part === 'app');
-  const libIndex = parts.findIndex(part => part === 'lib');
-  const specIndex = parts.findIndex(part => part === 'spec');
-  const testIndex = parts.findIndex(part => part === 'test');
-  
+  const appIndex = parts.findIndex((part) => part === 'app');
+  const libIndex = parts.findIndex((part) => part === 'lib');
+  const specIndex = parts.findIndex((part) => part === 'spec');
+  const testIndex = parts.findIndex((part) => part === 'test');
+
   let dir = null;
-  
+
   // Extract directory after common Rails directories
   if (appIndex !== -1 && appIndex + 1 < parts.length) {
     dir = parts[appIndex + 1];
@@ -40726,12 +40771,12 @@ function extractDirectory(filePath) {
     // Fallback: use second to last part (parent directory of file)
     dir = parts[parts.length - 2];
   }
-  
+
   // Capitalize first letter and return
   if (dir) {
     return dir.charAt(0).toUpperCase() + dir.slice(1);
   }
-  
+
   return 'Other';
 }
 
@@ -40742,14 +40787,14 @@ function extractDirectory(filePath) {
  */
 function generateFileData(files) {
   return files
-    .map(file => ({
+    .map((file) => ({
       name: extractFileName(file.filename),
       path: file.filename,
       lines: file.lines_of_code,
       covered: file.covered_lines,
       missed: file.lines_of_code - file.covered_lines,
       percentage: file.covered_percent.toFixed(1),
-      missedLines: extractMissedLines(file.coverage.lines)
+      missedLines: extractMissedLines(file.coverage.lines),
     }))
     .sort((a, b) => parseFloat(b.percentage) - parseFloat(a.percentage)); // Sort by coverage descending
 }
@@ -40775,19 +40820,20 @@ function extractMissedLines(lineCoverage) {
   if (!Array.isArray(lineCoverage)) {
     return [];
   }
-  
+
   return lineCoverage
     .map((coverage, index) => ({ line: index + 1, coverage }))
-    .filter(line => line.coverage === 0)
-    .map(line => line.line);
+    .filter((line) => line.coverage === 0)
+    .map((line) => line.line);
 }
 
 module.exports = {
   parseSimpleCov,
   calculateOverallSummary,
   groupFilesByDirectory,
-  generateFileData
-}; 
+  generateFileData,
+};
+
 
 /***/ }),
 
@@ -41114,14 +41160,6 @@ module.exports = {
   getFileExtension,
   sanitizeHtml,
 };
-
-
-/***/ }),
-
-/***/ 9469:
-/***/ ((module) => {
-
-module.exports = eval("require")("./parse");
 
 
 /***/ }),
