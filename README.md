@@ -310,6 +310,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Acknowledgments
 
 - Inspired by [pytest-coverage-comment](https://github.com/MishaKav/pytest-coverage-comment)
-- Built for the Rails community 
+- Built for the Rails community
+
+<!-- Testing PR comment functionality with new features --> 
 
 <!-- Test PR comment generation --> 
