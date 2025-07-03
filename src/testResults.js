@@ -48,7 +48,7 @@ const parseJUnitFormat = (testsuites) => {
   let totalTime = 0;
 
   const suites = testsuites.testsuite || [];
-  
+
   suites.forEach((suite) => {
     if (suite.$) {
       totalTests += parseInt(suite.$.tests || 0);
@@ -64,7 +64,7 @@ const parseJUnitFormat = (testsuites) => {
     failures: totalFailures,
     errors: totalErrors,
     skipped: totalSkipped,
-    time: totalTime
+    time: totalTime,
   };
 };
 
@@ -89,13 +89,13 @@ const parseRSpecFormat = (rspec) => {
     failures: totalFailures,
     errors: totalErrors,
     skipped: totalSkipped,
-    time: totalTime
+    time: totalTime,
   };
 };
 
 // Get summary report from test results
 const getSummaryReport = (options) => {
-  const { testResultsPath, testResultsTitle } = options;
+  const { testResultsPath } = options;
 
   if (!testResultsPath) {
     return '';
@@ -118,18 +118,17 @@ const getSummaryReport = (options) => {
 
 // Generate summary HTML
 const generateSummaryHtml = async (options) => {
-  const { testResultsTitle } = options;
   const parsedResults = await getParsedTestResults(options);
-  
+
   const { tests, skipped, failures, errors, time } = parsedResults;
-  const title = testResultsTitle || 'Test Results';
-  
+  const title = 'Test Results';
+
   const timeFormatted = formatTime(time);
-  
+
   let html = `| ${title} | Skipped | Failures | Errors | Time |\n`;
   html += `| ----- | ------- | -------- | -------- | ------------------ |\n`;
   html += `| ${tests} | ${skipped} :zzz: | ${failures} :x: | ${errors} :fire: | ${timeFormatted} :stopwatch: |`;
-  
+
   return html;
 };
 
@@ -165,17 +164,17 @@ const getNotSuccessTestInfo = async (options) => {
             if (testcase.failure) {
               failures.push({
                 classname: testcase.$.classname || '',
-                name: testcase.$.name || ''
+                name: testcase.$.name || '',
               });
             } else if (testcase.error) {
               errors.push({
                 classname: testcase.$.classname || '',
-                name: testcase.$.name || ''
+                name: testcase.$.name || '',
               });
             } else if (testcase.skipped) {
               skipped.push({
                 classname: testcase.$.classname || '',
-                name: testcase.$.name || ''
+                name: testcase.$.name || '',
               });
             }
           });
@@ -199,4 +198,4 @@ module.exports = {
   parseJUnitFormat,
   parseRSpecFormat,
   generateSummaryHtml,
-}; 
+};

@@ -11,21 +11,20 @@ const getMultipleReport = (options) => {
     return '';
   }
 
-  let html = '<table><tr><th>Title</th><th>Coverage</th><th>Tests</th><th>Status</th></tr><tbody>';
+  let html =
+    '<table><tr><th>Title</th><th>Coverage</th><th>Tests</th><th>Status</th></tr><tbody>';
 
   multipleFiles.forEach((line) => {
     const parts = line.split(',').map((part) => part.trim());
-    
+
     if (parts.length >= 2) {
       const title = parts[0];
       const coveragePath = parts[1];
-      const testResultsPath = parts[2] || '';
 
       const report = generateSingleReport({
         ...options,
         coveragePath,
-        testResultsPath,
-        title
+        title,
       });
 
       html += toMultiRow(title, report);
@@ -38,7 +37,7 @@ const getMultipleReport = (options) => {
 
 // Generate a single report for multiple files
 const generateSingleReport = (options) => {
-  const { coveragePath, coverageXmlPath, testResultsPath } = options;
+  const { coveragePath, coverageXmlPath } = options;
 
   try {
     let report;
@@ -54,14 +53,14 @@ const generateSingleReport = (options) => {
     return {
       coverage: report.coverage,
       color: report.color,
-      summary: summaryReport
+      summary: summaryReport,
     };
   } catch (error) {
     core.error(`Error generating report for ${coveragePath}: ${error.message}`);
     return {
       coverage: '0%',
       color: 'red',
-      summary: ''
+      summary: '',
     };
   }
 };
@@ -69,7 +68,7 @@ const generateSingleReport = (options) => {
 // Convert multiple report to table row
 const toMultiRow = (title, report) => {
   const { coverage, color, summary } = report;
-  
+
   // Extract test information from summary
   let testInfo = '';
   if (summary) {
@@ -80,15 +79,15 @@ const toMultiRow = (title, report) => {
   }
 
   const status = getStatusFromReport(report);
-  
+
   return `<tr><td>${title}</td><td><img alt="Coverage" src="https://img.shields.io/badge/Coverage-${coverage}-${color}.svg" /></td><td>${testInfo}</td><td>${status}</td></tr>`;
 };
 
 // Get status from report
 const getStatusFromReport = (report) => {
-  const { coverage, summary } = report;
+  const { coverage } = report;
   const coverageNum = parseFloat(coverage);
-  
+
   if (coverageNum >= 90) {
     return '🟢 Excellent';
   } else if (coverageNum >= 80) {
@@ -105,4 +104,4 @@ module.exports = {
   generateSingleReport,
   toMultiRow,
   getStatusFromReport,
-}; 
+};

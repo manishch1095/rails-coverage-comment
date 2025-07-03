@@ -10,12 +10,6 @@ const {
 const { getMultipleReport } = require('./multiFiles');
 
 const MAX_COMMENT_LENGTH = 65536;
-const FILE_STATUSES = Object.freeze({
-  ADDED: 'added',
-  MODIFIED: 'modified',
-  REMOVED: 'removed',
-  RENAMED: 'renamed',
-});
 
 // Create or edit a comment on a PR
 const createOrEditComment = async (
@@ -106,8 +100,12 @@ const main = async () => {
     required: false,
   });
   const pathPrefix = core.getInput('coverage-path-prefix', { required: false });
-  const testResultsPath = core.getInput('test-results-path', { required: false });
-  const testResultsTitle = core.getInput('test-results-title', { required: false });
+  const testResultsPath = core.getInput('test-results-path', {
+    required: false,
+  });
+  const testResultsTitle = core.getInput('test-results-title', {
+    required: false,
+  });
   const multipleFiles = core.getMultilineInput('multiple-files', {
     required: false,
   });
@@ -227,8 +225,12 @@ const main = async () => {
     eventName !== 'workflow_dispatch' &&
     eventName !== 'workflow_run'
   ) {
-    core.warning(`Your comment is too long (maximum is ${MAX_COMMENT_LENGTH} characters), coverage report will not be added.`);
-    core.warning(`Try adding "hide-report: true" or "report-only-changed-files: true", or switch to "multiple-files" mode`);
+    core.warning(
+      `Your comment is too long (maximum is ${MAX_COMMENT_LENGTH} characters), coverage report will not be added.`,
+    );
+    core.warning(
+      `Try adding "hide-report: true" or "report-only-changed-files: true", or switch to "multiple-files" mode`,
+    );
     report = { ...report, html: '' };
   }
 
@@ -240,10 +242,13 @@ const main = async () => {
   // Post comment if not hidden
   if (!options.hideComment && finalHtml) {
     const octokit = github.getOctokit(token);
-    const issue_number = issueNumberInput || payload.pull_request?.number || payload.issue?.number;
+    const issue_number =
+      issueNumberInput || payload.pull_request?.number || payload.issue?.number;
 
     if (!issue_number) {
-      core.error('No issue number found. Please provide issue-number input or run on a pull request.');
+      core.error(
+        'No issue number found. Please provide issue-number input or run on a pull request.',
+      );
       return;
     }
 
@@ -256,7 +261,14 @@ const main = async () => {
         body: finalHtml,
       });
     } else {
-      await createOrEditComment(octokit, repo, owner, issue_number, finalHtml, WATERMARK);
+      await createOrEditComment(
+        octokit,
+        repo,
+        owner,
+        issue_number,
+        finalHtml,
+        WATERMARK,
+      );
     }
   }
 
@@ -266,4 +278,4 @@ const main = async () => {
 // Run the main function
 main().catch((error) => {
   core.setFailed(error.message);
-}); 
+});

@@ -31,7 +31,7 @@ const getContentFile = (filePath) => {
 // Get coverage color based on percentage
 const getCoverageColor = (coverage) => {
   const percentage = parseFloat(coverage);
-  
+
   if (percentage >= 90) {
     return 'brightgreen';
   } else if (percentage >= 80) {
@@ -50,7 +50,7 @@ const getCoverageColor = (coverage) => {
 // Extract percentage from coverage string
 const extractPercentage = (coverageString) => {
   if (!coverageString) return '0';
-  
+
   const match = coverageString.match(/(\d+(?:\.\d+)?)%/);
   return match ? match[1] : '0';
 };
@@ -58,7 +58,7 @@ const extractPercentage = (coverageString) => {
 // Format time in seconds to human readable format
 const formatTime = (seconds) => {
   if (!seconds) return '0s';
-  
+
   const numSeconds = parseFloat(seconds);
   if (numSeconds < 60) {
     return `${numSeconds.toFixed(3)}s`;
@@ -90,7 +90,7 @@ const getFileExtension = (filePath) => {
 // Sanitize HTML content
 const sanitizeHtml = (html) => {
   if (!html) return '';
-  
+
   return html
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -108,4 +108,4 @@ module.exports = {
   fileExists,
   getFileExtension,
   sanitizeHtml,
-}; 
+};

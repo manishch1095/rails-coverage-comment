@@ -39916,21 +39916,20 @@ const getMultipleReport = (options) => {
     return '';
   }
 
-  let html = '<table><tr><th>Title</th><th>Coverage</th><th>Tests</th><th>Status</th></tr><tbody>';
+  let html =
+    '<table><tr><th>Title</th><th>Coverage</th><th>Tests</th><th>Status</th></tr><tbody>';
 
   multipleFiles.forEach((line) => {
     const parts = line.split(',').map((part) => part.trim());
-    
+
     if (parts.length >= 2) {
       const title = parts[0];
       const coveragePath = parts[1];
-      const testResultsPath = parts[2] || '';
 
       const report = generateSingleReport({
         ...options,
         coveragePath,
-        testResultsPath,
-        title
+        title,
       });
 
       html += toMultiRow(title, report);
@@ -39943,7 +39942,7 @@ const getMultipleReport = (options) => {
 
 // Generate a single report for multiple files
 const generateSingleReport = (options) => {
-  const { coveragePath, coverageXmlPath, testResultsPath } = options;
+  const { coveragePath, coverageXmlPath } = options;
 
   try {
     let report;
@@ -39959,14 +39958,14 @@ const generateSingleReport = (options) => {
     return {
       coverage: report.coverage,
       color: report.color,
-      summary: summaryReport
+      summary: summaryReport,
     };
   } catch (error) {
     core.error(`Error generating report for ${coveragePath}: ${error.message}`);
     return {
       coverage: '0%',
       color: 'red',
-      summary: ''
+      summary: '',
     };
   }
 };
@@ -39974,7 +39973,7 @@ const generateSingleReport = (options) => {
 // Convert multiple report to table row
 const toMultiRow = (title, report) => {
   const { coverage, color, summary } = report;
-  
+
   // Extract test information from summary
   let testInfo = '';
   if (summary) {
@@ -39985,15 +39984,15 @@ const toMultiRow = (title, report) => {
   }
 
   const status = getStatusFromReport(report);
-  
+
   return `<tr><td>${title}</td><td><img alt="Coverage" src="https://img.shields.io/badge/Coverage-${coverage}-${color}.svg" /></td><td>${testInfo}</td><td>${status}</td></tr>`;
 };
 
 // Get status from report
 const getStatusFromReport = (report) => {
-  const { coverage, summary } = report;
+  const { coverage } = report;
   const coverageNum = parseFloat(coverage);
-  
+
   if (coverageNum >= 90) {
     return '🟢 Excellent';
   } else if (coverageNum >= 80) {
@@ -40010,7 +40009,8 @@ module.exports = {
   generateSingleReport,
   toMultiRow,
   getStatusFromReport,
-}; 
+};
+
 
 /***/ }),
 
@@ -40018,7 +40018,12 @@ module.exports = {
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 const core = __nccwpck_require__(7484);
-const { getPathToFile, getContentFile, getCoverageColor, extractPercentage } = __nccwpck_require__(5804);
+const {
+  getPathToFile,
+  getContentFile,
+  getCoverageColor,
+  extractPercentage,
+} = __nccwpck_require__(5804);
 
 // Check if the coverage file contains valid SimpleCov HTML content
 const isValidCoverageContent = (data) => {
@@ -40026,12 +40031,7 @@ const isValidCoverageContent = (data) => {
     return false;
   }
 
-  const wordsToInclude = [
-    'SimpleCov',
-    'coverage',
-    'Total',
-    'Coverage'
-  ];
+  const wordsToInclude = ['SimpleCov', 'coverage', 'Total', 'Coverage'];
 
   return wordsToInclude.some((w) => data.includes(w));
 };
@@ -40039,72 +40039,73 @@ const isValidCoverageContent = (data) => {
 // Extract total coverage percentage from SimpleCov HTML
 const getTotalCoverage = (data) => {
   if (!data) return '0';
-  
+
   // Look for total coverage in the HTML
   const totalMatch = data.match(/Total.*?(\d+(?:\.\d+)?)%/i);
   if (totalMatch) {
     return totalMatch[1];
   }
-  
+
   // Alternative pattern for SimpleCov HTML
   const coverageMatch = data.match(/coverage.*?(\d+(?:\.\d+)?)%/i);
   if (coverageMatch) {
     return coverageMatch[1];
   }
-  
+
   return '0';
 };
 
 // Parse file coverage data from SimpleCov HTML
 const parseFileCoverage = (data) => {
   if (!data) return [];
-  
+
   const files = [];
-  
+
   // Extract file information from SimpleCov HTML
   // This regex looks for file entries in the coverage report
-  const fileRegex = /<tr[^>]*class="[^"]*file[^"]*"[^>]*>.*?<td[^>]*>([^<]+)<\/td>.*?<td[^>]*>(\d+)<\/td>.*?<td[^>]*>(\d+)<\/td>.*?<td[^>]*>(\d+(?:\.\d+)?)%<\/td>/gis;
-  
+  const fileRegex =
+    /<tr[^>]*class="[^"]*file[^"]*"[^>]*>.*?<td[^>]*>([^<]+)<\/td>.*?<td[^>]*>(\d+)<\/td>.*?<td[^>]*>(\d+)<\/td>.*?<td[^>]*>(\d+(?:\.\d+)?)%<\/td>/gis;
+
   let match;
   while ((match = fileRegex.exec(data)) !== null) {
     const fileName = match[1].trim();
     const statements = parseInt(match[2]) || 0;
     const missed = parseInt(match[3]) || 0;
     const coverage = match[4];
-    
+
     files.push({
       name: fileName,
       stmts: statements.toString(),
       miss: missed.toString(),
       cover: coverage,
-      missing: missed > 0 ? 'lines' : null // SimpleCov doesn't provide specific line numbers in HTML
+      missing: missed > 0 ? 'lines' : null, // SimpleCov doesn't provide specific line numbers in HTML
     });
   }
-  
+
   return files;
 };
 
 // Get total statistics from SimpleCov HTML
 const getTotal = (data) => {
   if (!data) return null;
-  
+
   const totalMatch = data.match(/Total.*?(\d+).*?(\d+).*?(\d+(?:\.\d+)?)%/i);
   if (totalMatch) {
     return {
       name: 'TOTAL',
       stmts: totalMatch[1],
       miss: totalMatch[2],
-      cover: totalMatch[3] + '%'
+      cover: totalMatch[3] + '%',
     };
   }
-  
+
   return null;
 };
 
 // Get warnings from SimpleCov HTML (if any)
 const getWarnings = (data) => {
   if (!data) return 0;
-  
+
   // SimpleCov typically doesn't show warnings in HTML, but we can look for them
   const warningMatch = data.match(/warning/gi);
   return warningMatch ? warningMatch.length : 0;
@@ -40136,22 +40137,25 @@ const toTable = (data, options, dataFromXml = null) => {
   const folders = makeFolders(coverage, options);
   const total = dataFromXml ? dataFromXml.total : getTotal(data);
 
-  let html = '<table><tr><th>File</th><th>Stmts</th><th>Miss</th><th>Cover</th><th>Missing</th></tr><tbody>';
+  let html =
+    '<table><tr><th>File</th><th>Stmts</th><th>Miss</th><th>Cover</th><th>Missing</th></tr><tbody>';
 
   // Add files grouped by folders
-  Object.keys(folders).sort().forEach((folder) => {
-    if (folder) {
-      html += `<tr><td colspan="5"><b>${folder}</b></td></tr>`;
-    }
-    
-    folders[folder].forEach((file) => {
-      html += toRow(file, !!folder, options);
+  Object.keys(folders)
+    .sort()
+    .forEach((folder) => {
+      if (folder) {
+        html += `<tr><td colspan="5"><b>${folder}</b></td></tr>`;
+      }
+
+      folders[folder].forEach((file) => {
+        html += toRow(file, !!folder, options);
+      });
     });
-  });
 
   // Add total row
   if (total) {
-    html += toTotalRow(total, options);
+    html += toTotalRow(total);
   }
 
   html += '</tbody></table>';
@@ -40162,12 +40166,12 @@ const toTable = (data, options, dataFromXml = null) => {
 const toRow = (item, indent = false, options) => {
   const fileNameTd = toFileNameTd(item, indent, options);
   const missingTd = toMissingTd(item, options);
-  
+
   return `<tr><td>${fileNameTd}</td><td>${item.stmts}</td><td>${item.miss}</td><td>${item.cover}</td><td>${missingTd}</td></tr>`;
 };
 
 // Convert total row to HTML
-const toTotalRow = (item, options) => {
+const toTotalRow = (item) => {
   return `<tr><td><b>${item.name}</b></td><td><b>${item.stmts}</b></td><td><b>${item.miss}</b></td><td><b>${item.cover}</b></td><td>&nbsp;</td></tr>`;
 };
 
@@ -40176,17 +40180,17 @@ const toFileNameTd = (item, indent = false, options) => {
   const { repoUrl, commit, pathPrefix } = options;
   const indentStr = indent ? '&nbsp; &nbsp;' : '';
   const fileName = item.name.replace(options.prefix || '', '');
-  
+
   const fileUrl = `${repoUrl}/blob/${commit}/${pathPrefix || ''}${fileName}`;
   return `${indentStr}<a href="${fileUrl}">${fileName}</a>`;
 };
 
 // Convert missing lines to HTML
-const toMissingTd = (item, options) => {
+const toMissingTd = (item) => {
   if (!item.missing || item.missing === 'lines') {
     return item.missing || '&nbsp;';
   }
-  
+
   // For SimpleCov, we typically don't have specific line numbers in HTML
   // This would need to be enhanced if we parse XML coverage files
   return item.missing;
@@ -40202,13 +40206,14 @@ const getCoverageReport = (options) => {
     const isValid = isValidCoverageContent(content);
 
     if (content && !isValid) {
-      core.error(`Coverage file "${coverageFilePath}" has bad format or wrong data`);
+      core.error(
+        `Coverage file "${coverageFilePath}" has bad format or wrong data`,
+      );
     }
 
     if (content && isValid) {
       const coverage = getTotalCoverage(content);
       const html = toHtml(content, options);
-      const total = getTotal(content);
       const warnings = getWarnings(content);
       const color = getCoverageColor(coverage);
 
@@ -40223,28 +40228,26 @@ const getCoverageReport = (options) => {
 
 // Convert coverage data to HTML output
 const toHtml = (data, options) => {
-  const {
-    badgeTitle,
-    title,
-    hideBadge,
-    hideReport,
-    reportOnlyChangedFiles,
-    removeLinkFromBadge,
-  } = options;
-  
+  const { badgeTitle, title, hideBadge, hideReport, removeLinkFromBadge } =
+    options;
+
   const table = hideReport ? '' : toTable(data, options);
   const total = getTotal(data);
   const color = getCoverageColor(total ? extractPercentage(total.cover) : '0');
   const coverage = total ? total.cover : '0%';
-  
-  const badgeUrl = removeLinkFromBadge 
+
+  const badgeUrl = removeLinkFromBadge
     ? `https://img.shields.io/badge/${badgeTitle}-${coverage}-${color}.svg`
     : `https://img.shields.io/badge/${badgeTitle}-${coverage}-${color}.svg`;
-  
-  const badge = hideBadge ? '' : `<img alt="Coverage" src="${badgeUrl}" /><br/>`;
-  
-  const report = hideReport ? '' : `<details><summary>${title}</summary>${table}</details>`;
-  
+
+  const badge = hideBadge
+    ? ''
+    : `<img alt="Coverage" src="${badgeUrl}" /><br/>`;
+
+  const report = hideReport
+    ? ''
+    : `<details><summary>${title}</summary>${table}</details>`;
+
   return `${badge}${report}`;
 };
 
@@ -40261,7 +40264,8 @@ module.exports = {
   toFileNameTd,
   toMissingTd,
   makeFolders,
-}; 
+};
+
 
 /***/ }),
 
@@ -40270,7 +40274,7 @@ module.exports = {
 
 const core = __nccwpck_require__(7484);
 const xml2js = __nccwpck_require__(758);
-const { getPathToFile, getContentFile, getCoverageColor, extractPercentage } = __nccwpck_require__(5804);
+const { getPathToFile, getContentFile, getCoverageColor } = __nccwpck_require__(5804);
 
 // Parse SimpleCov XML coverage report
 const getCoverageXmlReport = async (options) => {
@@ -40313,74 +40317,75 @@ const extractTotalCoverageFromXml = (coverage) => {
     const lineRate = parseFloat(coverage.$.line_rate);
     return (lineRate * 100).toFixed(1);
   }
-  
+
   if (coverage.$ && coverage.$.branch_rate) {
     const branchRate = parseFloat(coverage.$.branch_rate);
     return (branchRate * 100).toFixed(1);
   }
-  
+
   return '0';
 };
 
 // Parse files from XML coverage report
 const parseFilesFromXml = (coverage, options) => {
   const files = [];
-  
+
   if (!coverage.packages || !coverage.packages[0]) {
     return files;
   }
 
   const packages = coverage.packages[0].package || [];
-  
+
   packages.forEach((pkg) => {
     if (pkg.classes && pkg.classes[0]) {
       const classes = pkg.classes[0].class || [];
-      
+
       classes.forEach((cls) => {
         if (cls.$ && cls.$.filename) {
           const fileName = cls.$.filename.replace(options.prefix || '', '');
           const lineRate = cls.$.line_rate ? parseFloat(cls.$.line_rate) : 0;
-          const branchRate = cls.$.branch_rate ? parseFloat(cls.$.branch_rate) : 0;
-          
+
           // Calculate statements and missed lines
           const lines = cls.lines ? cls.lines[0].line || [] : [];
           const statements = lines.length;
-          const missed = lines.filter(line => line.$ && line.$.hits === '0').length;
-          
+          const missed = lines.filter(
+            (line) => line.$ && line.$.hits === '0',
+          ).length;
+
           files.push({
             name: fileName,
             stmts: statements.toString(),
             miss: missed.toString(),
             cover: (lineRate * 100).toFixed(1) + '%',
-            missing: missed > 0 ? getMissingLines(lines) : null
+            missing: missed > 0 ? getMissingLines(lines) : null,
           });
         }
       });
     }
   });
-  
+
   return files;
 };
 
 // Get missing lines from XML
 const getMissingLines = (lines) => {
   const missingLines = [];
-  
+
   lines.forEach((line) => {
     if (line.$ && line.$.hits === '0' && line.$.number) {
       missingLines.push(parseInt(line.$.number));
     }
   });
-  
+
   if (missingLines.length === 0) {
     return null;
   }
-  
+
   // Group consecutive lines
   const groups = [];
   let start = missingLines[0];
   let end = missingLines[0];
-  
+
   for (let i = 1; i < missingLines.length; i++) {
     if (missingLines[i] === end + 1) {
       end = missingLines[i];
@@ -40390,31 +40395,29 @@ const getMissingLines = (lines) => {
       end = missingLines[i];
     }
   }
-  
+
   groups.push(start === end ? start.toString() : `${start}-${end}`);
-  
+
   return groups.join(', ');
 };
 
 // Convert XML data to HTML
 const toHtmlFromXml = (data, options) => {
-  const {
-    badgeTitle,
-    title,
-    hideBadge,
-    hideReport,
-    removeLinkFromBadge,
-  } = options;
-  
+  const { badgeTitle, title, hideBadge, hideReport } = options;
+
   const table = hideReport ? '' : toTableFromXml(data, options);
   const color = getCoverageColor(data.total);
   const coverage = data.total + '%';
-  
+
   const badgeUrl = `https://img.shields.io/badge/${badgeTitle}-${coverage}-${color}.svg`;
-  const badge = hideBadge ? '' : `<img alt="Coverage" src="${badgeUrl}" /><br/>`;
-  
-  const report = hideReport ? '' : `<details><summary>${title}</summary>${table}</details>`;
-  
+  const badge = hideBadge
+    ? ''
+    : `<img alt="Coverage" src="${badgeUrl}" /><br/>`;
+
+  const report = hideReport
+    ? ''
+    : `<details><summary>${title}</summary>${table}</details>`;
+
   return `${badge}${report}`;
 };
 
@@ -40422,31 +40425,34 @@ const toHtmlFromXml = (data, options) => {
 const toTableFromXml = (data, options) => {
   const { files } = data;
   const folders = makeFoldersFromXml(files, options);
-  
-  let html = '<table><tr><th>File</th><th>Stmts</th><th>Miss</th><th>Cover</th><th>Missing</th></tr><tbody>';
-  
+
+  let html =
+    '<table><tr><th>File</th><th>Stmts</th><th>Miss</th><th>Cover</th><th>Missing</th></tr><tbody>';
+
   // Add files grouped by folders
-  Object.keys(folders).sort().forEach((folder) => {
-    if (folder) {
-      html += `<tr><td colspan="5"><b>${folder}</b></td></tr>`;
-    }
-    
-    folders[folder].forEach((file) => {
-      html += toRowFromXml(file, !!folder, options);
+  Object.keys(folders)
+    .sort()
+    .forEach((folder) => {
+      if (folder) {
+        html += `<tr><td colspan="5"><b>${folder}</b></td></tr>`;
+      }
+
+      folders[folder].forEach((file) => {
+        html += toRowFromXml(file, !!folder, options);
+      });
     });
-  });
-  
+
   // Add total row
   const total = {
     name: 'TOTAL',
     stmts: files.reduce((sum, f) => sum + parseInt(f.stmts), 0).toString(),
     miss: files.reduce((sum, f) => sum + parseInt(f.miss), 0).toString(),
-    cover: data.total + '%'
+    cover: data.total + '%',
   };
-  
+
   html += toTotalRowFromXml(total, options);
   html += '</tbody></table>';
-  
+
   return html;
 };
 
@@ -40469,12 +40475,12 @@ const makeFoldersFromXml = (files, options) => {
 const toRowFromXml = (item, indent = false, options) => {
   const fileNameTd = toFileNameTdFromXml(item, indent, options);
   const missingTd = toMissingTdFromXml(item, options);
-  
+
   return `<tr><td>${fileNameTd}</td><td>${item.stmts}</td><td>${item.miss}</td><td>${item.cover}</td><td>${missingTd}</td></tr>`;
 };
 
 // Convert total row to HTML from XML data
-const toTotalRowFromXml = (item, options) => {
+const toTotalRowFromXml = (item) => {
   return `<tr><td><b>${item.name}</b></td><td><b>${item.stmts}</b></td><td><b>${item.miss}</b></td><td><b>${item.cover}</b></td><td>&nbsp;</td></tr>`;
 };
 
@@ -40483,7 +40489,7 @@ const toFileNameTdFromXml = (item, indent = false, options) => {
   const { repoUrl, commit, pathPrefix } = options;
   const indentStr = indent ? '&nbsp; &nbsp;' : '';
   const fileName = item.name.replace(options.prefix || '', '');
-  
+
   const fileUrl = `${repoUrl}/blob/${commit}/${pathPrefix || ''}${fileName}`;
   return `${indentStr}<a href="${fileUrl}">${fileName}</a>`;
 };
@@ -40493,16 +40499,16 @@ const toMissingTdFromXml = (item, options) => {
   if (!item.missing) {
     return '&nbsp;';
   }
-  
+
   const { repoUrl, commit, pathPrefix } = options;
   const fileName = item.name.replace(options.prefix || '', '');
-  
+
   // Create links for missing lines
-  const missingLinks = item.missing.split(', ').map(lineRange => {
+  const missingLinks = item.missing.split(', ').map((lineRange) => {
     const fileUrl = `${repoUrl}/blob/${commit}/${pathPrefix || ''}${fileName}#L${lineRange}`;
     return `<a href="${fileUrl}">${lineRange}</a>`;
   });
-  
+
   return missingLinks.join(', ');
 };
 
@@ -40518,7 +40524,8 @@ module.exports = {
   toTotalRowFromXml,
   toFileNameTdFromXml,
   toMissingTdFromXml,
-}; 
+};
+
 
 /***/ }),
 
@@ -40575,7 +40582,7 @@ const parseJUnitFormat = (testsuites) => {
   let totalTime = 0;
 
   const suites = testsuites.testsuite || [];
-  
+
   suites.forEach((suite) => {
     if (suite.$) {
       totalTests += parseInt(suite.$.tests || 0);
@@ -40591,7 +40598,7 @@ const parseJUnitFormat = (testsuites) => {
     failures: totalFailures,
     errors: totalErrors,
     skipped: totalSkipped,
-    time: totalTime
+    time: totalTime,
   };
 };
 
@@ -40616,13 +40623,13 @@ const parseRSpecFormat = (rspec) => {
     failures: totalFailures,
     errors: totalErrors,
     skipped: totalSkipped,
-    time: totalTime
+    time: totalTime,
   };
 };
 
 // Get summary report from test results
 const getSummaryReport = (options) => {
-  const { testResultsPath, testResultsTitle } = options;
+  const { testResultsPath } = options;
 
   if (!testResultsPath) {
     return '';
@@ -40645,18 +40652,17 @@ const getSummaryReport = (options) => {
 
 // Generate summary HTML
 const generateSummaryHtml = async (options) => {
-  const { testResultsTitle } = options;
   const parsedResults = await getParsedTestResults(options);
-  
+
   const { tests, skipped, failures, errors, time } = parsedResults;
-  const title = testResultsTitle || 'Test Results';
-  
+  const title = 'Test Results';
+
   const timeFormatted = formatTime(time);
-  
+
   let html = `| ${title} | Skipped | Failures | Errors | Time |\n`;
   html += `| ----- | ------- | -------- | -------- | ------------------ |\n`;
   html += `| ${tests} | ${skipped} :zzz: | ${failures} :x: | ${errors} :fire: | ${timeFormatted} :stopwatch: |`;
-  
+
   return html;
 };
 
@@ -40692,17 +40698,17 @@ const getNotSuccessTestInfo = async (options) => {
             if (testcase.failure) {
               failures.push({
                 classname: testcase.$.classname || '',
-                name: testcase.$.name || ''
+                name: testcase.$.name || '',
               });
             } else if (testcase.error) {
               errors.push({
                 classname: testcase.$.classname || '',
-                name: testcase.$.name || ''
+                name: testcase.$.name || '',
               });
             } else if (testcase.skipped) {
               skipped.push({
                 classname: testcase.$.classname || '',
-                name: testcase.$.name || ''
+                name: testcase.$.name || '',
               });
             }
           });
@@ -40726,7 +40732,8 @@ module.exports = {
   parseJUnitFormat,
   parseRSpecFormat,
   generateSummaryHtml,
-}; 
+};
+
 
 /***/ }),
 
@@ -40766,7 +40773,7 @@ const getContentFile = (filePath) => {
 // Get coverage color based on percentage
 const getCoverageColor = (coverage) => {
   const percentage = parseFloat(coverage);
-  
+
   if (percentage >= 90) {
     return 'brightgreen';
   } else if (percentage >= 80) {
@@ -40785,7 +40792,7 @@ const getCoverageColor = (coverage) => {
 // Extract percentage from coverage string
 const extractPercentage = (coverageString) => {
   if (!coverageString) return '0';
-  
+
   const match = coverageString.match(/(\d+(?:\.\d+)?)%/);
   return match ? match[1] : '0';
 };
@@ -40793,7 +40800,7 @@ const extractPercentage = (coverageString) => {
 // Format time in seconds to human readable format
 const formatTime = (seconds) => {
   if (!seconds) return '0s';
-  
+
   const numSeconds = parseFloat(seconds);
   if (numSeconds < 60) {
     return `${numSeconds.toFixed(3)}s`;
@@ -40825,7 +40832,7 @@ const getFileExtension = (filePath) => {
 // Sanitize HTML content
 const sanitizeHtml = (html) => {
   if (!html) return '';
-  
+
   return html
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -40843,7 +40850,8 @@ module.exports = {
   fileExists,
   getFileExtension,
   sanitizeHtml,
-}; 
+};
+
 
 /***/ }),
 
@@ -42795,12 +42803,6 @@ const {
 const { getMultipleReport } = __nccwpck_require__(7221);
 
 const MAX_COMMENT_LENGTH = 65536;
-const FILE_STATUSES = Object.freeze({
-  ADDED: 'added',
-  MODIFIED: 'modified',
-  REMOVED: 'removed',
-  RENAMED: 'renamed',
-});
 
 // Create or edit a comment on a PR
 const createOrEditComment = async (
@@ -42891,8 +42893,12 @@ const main = async () => {
     required: false,
   });
   const pathPrefix = core.getInput('coverage-path-prefix', { required: false });
-  const testResultsPath = core.getInput('test-results-path', { required: false });
-  const testResultsTitle = core.getInput('test-results-title', { required: false });
+  const testResultsPath = core.getInput('test-results-path', {
+    required: false,
+  });
+  const testResultsTitle = core.getInput('test-results-title', {
+    required: false,
+  });
   const multipleFiles = core.getMultilineInput('multiple-files', {
     required: false,
   });
@@ -43012,8 +43018,12 @@ const main = async () => {
     eventName !== 'workflow_dispatch' &&
     eventName !== 'workflow_run'
   ) {
-    core.warning(`Your comment is too long (maximum is ${MAX_COMMENT_LENGTH} characters), coverage report will not be added.`);
-    core.warning(`Try adding "hide-report: true" or "report-only-changed-files: true", or switch to "multiple-files" mode`);
+    core.warning(
+      `Your comment is too long (maximum is ${MAX_COMMENT_LENGTH} characters), coverage report will not be added.`,
+    );
+    core.warning(
+      `Try adding "hide-report: true" or "report-only-changed-files: true", or switch to "multiple-files" mode`,
+    );
     report = { ...report, html: '' };
   }
 
@@ -43025,10 +43035,13 @@ const main = async () => {
   // Post comment if not hidden
   if (!options.hideComment && finalHtml) {
     const octokit = github.getOctokit(token);
-    const issue_number = issueNumberInput || payload.pull_request?.number || payload.issue?.number;
+    const issue_number =
+      issueNumberInput || payload.pull_request?.number || payload.issue?.number;
 
     if (!issue_number) {
-      core.error('No issue number found. Please provide issue-number input or run on a pull request.');
+      core.error(
+        'No issue number found. Please provide issue-number input or run on a pull request.',
+      );
       return;
     }
 
@@ -43041,7 +43054,14 @@ const main = async () => {
         body: finalHtml,
       });
     } else {
-      await createOrEditComment(octokit, repo, owner, issue_number, finalHtml, WATERMARK);
+      await createOrEditComment(
+        octokit,
+        repo,
+        owner,
+        issue_number,
+        finalHtml,
+        WATERMARK,
+      );
     }
   }
 
@@ -43051,7 +43071,8 @@ const main = async () => {
 // Run the main function
 main().catch((error) => {
   core.setFailed(error.message);
-}); 
+});
+
 module.exports = __webpack_exports__;
 /******/ })()
 ;
