@@ -75,10 +75,17 @@ class ParserManager {
 
     if (fs.existsSync(coverageFile)) {
       results.coverage = this.parseSimpleCov(coverageFile, includeFileDetails);
-      
+
       // Limit file details if too many files
-      if (results.coverage && results.coverage.files && results.coverage.files.length > maxFilesToShow) {
-        results.coverage.files = results.coverage.files.slice(0, maxFilesToShow);
+      if (
+        results.coverage &&
+        results.coverage.files &&
+        results.coverage.files.length > maxFilesToShow
+      ) {
+        results.coverage.files = results.coverage.files.slice(
+          0,
+          maxFilesToShow,
+        );
         results.coverage.filesTruncated = true;
       }
     }
@@ -99,4 +106,4 @@ class ParserManager {
   }
 }
 
-module.exports = ParserManager; 
+module.exports = ParserManager;
