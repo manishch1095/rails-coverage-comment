@@ -1,6 +1,6 @@
 const core = require('@actions/core');
 const xml2js = require('xml2js');
-const { getPathToFile, getContentFile, formatTime } = require('./utils');
+const { getPathToFile, getContentFile, formatTime } = require('../utils');
 
 // Parse test results from XML file
 const getParsedTestResults = async (options) => {

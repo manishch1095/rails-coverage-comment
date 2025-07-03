@@ -34,10 +34,20 @@ jobs:
       - name: Build action
         run: npm run build
 
-      - name: Test action with sample data (includes .last_run.json)
+      - name: Test action with SimpleCov JSON data
         uses: ./
         with:
-          coverage-path: ./test-data/coverage/index.html
+          coverage-file: ./test-data/coverage/coverage.json
           test-results-path: ./test-data/test-results.xml
           include-last-run: true
-          last-run-title: 'SimpleCov Coverage Metrics' 
+          last-run-title: 'SimpleCov Coverage Metrics'
+          include-file-details: true
+          max-files-to-show: 10
+
+      - name: Test action with file details disabled
+        uses: ./
+        with:
+          coverage-file: ./test-data/coverage/coverage.json
+          include-file-details: false
+          hide-report: false
+          hide-badge: false 

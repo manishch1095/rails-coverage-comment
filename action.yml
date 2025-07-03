@@ -13,8 +13,23 @@ inputs:
     required: true
 
   coverage-path:
-    description: 'The location of the SimpleCov coverage report (coverage/index.html)'
+    description: 'The location of the SimpleCov coverage report (coverage/index.html) - DEPRECATED: Use coverage-file instead'
     default: './coverage/index.html'
+    required: false
+
+  coverage-file:
+    description: 'Path to SimpleCov coverage.json file'
+    default: 'coverage/coverage.json'
+    required: false
+
+  include-file-details:
+    description: 'Include individual file coverage details in PR comment'
+    default: 'false'
+    required: false
+
+  max-files-to-show:
+    description: 'Maximum number of files to show in details (when include-file-details is enabled)'
+    default: '50'
     required: false
 
   coverage-xml-path:

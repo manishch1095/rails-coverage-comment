@@ -1,6 +1,6 @@
 const core = require('@actions/core');
 const xml2js = require('xml2js');
-const { getPathToFile, getContentFile, getCoverageColor } = require('./utils');
+const { getPathToFile, getContentFile, getCoverageColor } = require('../utils');
 
 // Parse SimpleCov XML coverage report
 const getCoverageXmlReport = async (options) => {
