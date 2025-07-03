@@ -16,9 +16,9 @@
     "simplecov"
   ],
   "bugs": {
-    "url": "https://github.com/manishchauhan/rails-coverage-comment/issues"
+    "url": "https://github.com/manishch1095/rails-coverage-comment/issues"
   },
-  "homepage": "https://github.com/manishchauhan/rails-coverage-comment/#readme",
+  "homepage": "https://github.com/manishch1095/rails-coverage-comment/#readme",
   "main": "src/index.js",
   "scripts": {
     "format": "prettier --write src/**/*.js",

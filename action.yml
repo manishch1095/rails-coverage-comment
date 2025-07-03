@@ -1,7 +1,7 @@
 # action.yml
 name: 'Rails Coverage Comment'
 description: 'SimpleCov coverage reports for Rails - inspired by pytest-coverage-comment but built for Ruby/Rails'
-author: 'Manish Chauhan'
+author: 'manishch1095'
 branding:
   icon: 'message-circle'
   color: 'red'

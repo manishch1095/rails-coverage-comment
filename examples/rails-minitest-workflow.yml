@@ -36,7 +36,7 @@ jobs:
           bundle exec rails test --format=JUnit --out=test-results.xml
 
       - name: Rails coverage comment
-        uses: manishchauhan/rails-coverage-comment@main
+        uses: manishch1095/rails-coverage-comment@v1.0.0
         with:
           coverage-path: ./coverage/index.html
           test-results-path: ./test-results.xml

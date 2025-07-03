@@ -24,7 +24,7 @@ Add this action to your GitHub workflow for Ubuntu runners:
 
 ```yaml
 - name: Rails coverage comment
-  uses: manishchauhan/rails-coverage-comment@main
+  uses: manishch1095/rails-coverage-comment@v1.0.0
   with:
     coverage-path: ./coverage/index.html
     test-results-path: ./test-results.xml
@@ -139,7 +139,7 @@ jobs:
           bundle exec rspec --format progress --format RspecJunitFormatter --out test-results.xml
 
       - name: Rails coverage comment
-        uses: manishchauhan/rails-coverage-comment@main
+        uses: manishch1095/rails-coverage-comment@v1.0.0
         with:
           coverage-path: ./coverage/index.html
           test-results-path: ./test-results.xml
@@ -180,7 +180,7 @@ jobs:
           bundle exec rails test --format=JUnit --out=test-results.xml
 
       - name: Rails coverage comment
-        uses: manishchauhan/rails-coverage-comment@main
+        uses: manishch1095/rails-coverage-comment@v1.0.0
         with:
           coverage-path: ./coverage/index.html
           test-results-path: ./test-results.xml
@@ -190,7 +190,7 @@ jobs:
 
 ```yaml
 - name: Rails coverage comment
-  uses: manishchauhan/rails-coverage-comment@main
+  uses: manishch1095/rails-coverage-comment@v1.0.0
   with:
     coverage-xml-path: ./coverage/coverage.xml
 ```
@@ -200,7 +200,7 @@ jobs:
 ```yaml
 - name: Rails coverage comment
   id: coverageComment
-  uses: manishchauhan/rails-coverage-comment@main
+  uses: manishch1095/rails-coverage-comment@v1.0.0
   with:
     coverage-path: ./coverage/index.html
     test-results-path: ./test-results.xml
@@ -224,7 +224,7 @@ jobs:
 
 ```yaml
 - name: Rails coverage comment
-  uses: manishchauhan/rails-coverage-comment@main
+  uses: manishch1095/rails-coverage-comment@v1.0.0
   with:
     multiple-files: |
       API Coverage, ./api/coverage/index.html, ./api/test-results.xml
@@ -236,7 +236,7 @@ jobs:
 
 ```yaml
 - name: Rails coverage comment
-  uses: manishchauhan/rails-coverage-comment@main
+  uses: manishch1095/rails-coverage-comment@v1.0.0
   with:
     coverage-path: ./coverage/index.html
     report-only-changed-files: true
