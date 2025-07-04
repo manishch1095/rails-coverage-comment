@@ -1,6 +1,9 @@
 const core = require('@actions/core');
 const xml2js = require('xml2js');
-const { getPathToFile, getContentFile, formatTime } = require('./utils');
+const { getPathToFile, getContentFile, formatTime } = require('../utils');
+
+// Check if running in CI environment
+const isCI = process.env.CI === 'true';
 
 // Parse test results from XML file
 const getParsedTestResults = async (options) => {
@@ -15,7 +18,9 @@ const getParsedTestResults = async (options) => {
     const content = getContentFile(xmlFilePath);
 
     if (!content) {
-      core.warning(`Test results file not found: ${xmlFilePath}`);
+      if (!isCI) {
+        core.warning(`Test results file not found: ${xmlFilePath}`);
+      }
       return { errors: 0, failures: 0, skipped: 0, tests: 0, time: 0 };
     }
 
@@ -30,11 +35,15 @@ const getParsedTestResults = async (options) => {
     } else if (result.rspec) {
       return parseRSpecFormat(result.rspec);
     } else {
-      core.warning('Unknown test results format');
+      if (!isCI) {
+        core.warning('Unknown test results format');
+      }
       return { errors: 0, failures: 0, skipped: 0, tests: 0, time: 0 };
     }
   } catch (error) {
-    core.error(`Error parsing test results: ${error.message}`);
+    if (!isCI) {
+      core.error(`Error parsing test results: ${error.message}`);
+    }
     return { errors: 0, failures: 0, skipped: 0, tests: 0, time: 0 };
   }
 };
@@ -151,9 +160,9 @@ const getNotSuccessTestInfo = async (options) => {
     const parser = new xml2js.Parser();
     const result = await parser.parseStringPromise(content);
 
-    let failures = [];
-    let errors = [];
-    let skipped = [];
+    const failures = [];
+    const errors = [];
+    const skipped = [];
 
     // Parse JUnit format
     if (result.testsuites) {

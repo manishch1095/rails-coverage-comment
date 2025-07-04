@@ -29,13 +29,29 @@ jobs:
         run: npm run lint
 
       - name: Run formatting check
-        run: npm run format-check
+        run: npm run format:check
 
       - name: Build action
         run: npm run build
 
-      - name: Test action with sample data
+      - name: Test action with SimpleCov JSON data
         uses: ./
         with:
-          coverage-path: ./test-data/coverage/index.html
-          test-results-path: ./test-data/test-results.xml 
+          unique-id-for-comment: 'test-workflow'
+          title: 'Coverage Report (with file details)'
+          coverage-file: ./test-data/coverage/coverage.json
+          test-results-path: ./test-data/test-results.xml
+          include-last-run: true
+          last-run-title: 'SimpleCov Coverage Metrics'
+          include-file-details: true
+          max-files-to-show: 10
+
+      - name: Test action with file details disabled
+        uses: ./
+        with:
+          unique-id-for-comment: 'test-workflow'
+          title: 'Coverage Report (without file details)'
+          coverage-file: ./test-data/coverage/coverage.json
+          include-file-details: false
+          hide-report: false
+          hide-badge: false 

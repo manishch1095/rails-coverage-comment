@@ -13,8 +13,23 @@ inputs:
     required: true
 
   coverage-path:
-    description: 'The location of the SimpleCov coverage report (coverage/index.html)'
+    description: 'The location of the SimpleCov coverage report (coverage/index.html) - DEPRECATED: Use coverage-file instead'
     default: './coverage/index.html'
+    required: false
+
+  coverage-file:
+    description: 'Path to SimpleCov coverage.json file'
+    default: 'coverage/coverage.json'
+    required: false
+
+  include-file-details:
+    description: 'Include individual file coverage details in PR comment'
+    default: 'false'
+    required: false
+
+  max-files-to-show:
+    description: 'Maximum number of files to show in details (when include-file-details is enabled)'
+    default: '50'
     required: false
 
   coverage-xml-path:
@@ -106,6 +121,16 @@ inputs:
     default: ''
     required: false
 
+  include-last-run:
+    description: 'Include SimpleCov .last_run.json data in the comment'
+    default: 'false'
+    required: false
+
+  last-run-title:
+    description: 'Title for the last run coverage section'
+    default: 'Last Run Coverage'
+    required: false
+
 outputs:
   coverage:
     description: 'value indicating the coverage percentage of your report based on SimpleCov, example 85.5%'
@@ -129,6 +154,10 @@ outputs:
     description: 'Seconds it took to run all the tests, get from test results'
   notSuccessTestInfo:
     description: 'Info from testcase that has failures/errors/skipped, get from test results'
+  line-coverage:
+    description: 'Line coverage percentage from .last_run.json'
+  branch-coverage:
+    description: 'Branch coverage percentage from .last_run.json'
 
 runs:
   using: 'node20'

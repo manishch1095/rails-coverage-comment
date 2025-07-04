@@ -1,0 +1,91 @@
+name: Rails Test Suite with Coverage
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+      
+      - name: Run unit tests
+        run: bundle exec rspec --format progress
+      
+      - name: Generate coverage report
+        run: bundle exec rspec --coverage-format=json
+      
+      - name: Post coverage comment
+        uses: ./
+        with:
+          unique-id-for-comment: 'rails-coverage'
+          title: 'Unit Tests Coverage'
+          coverage-file: coverage/coverage.json
+          test-results-path: coverage/rspec.xml
+          include-file-details: true
+          max-files-to-show: 15
+
+  integration-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+      
+      - name: Run integration tests
+        run: bundle exec rspec spec/integration --format progress
+      
+      - name: Generate coverage report
+        run: bundle exec rspec spec/integration --coverage-format=json
+      
+      - name: Post coverage comment
+        uses: ./
+        with:
+          unique-id-for-comment: 'rails-coverage'
+          title: 'Integration Tests Coverage'
+          coverage-file: coverage/coverage.json
+          test-results-path: coverage/rspec.xml
+          include-file-details: true
+          max-files-to-show: 15
+
+  system-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+      
+      - name: Run system tests
+        run: bundle exec rspec spec/system --format progress
+      
+      - name: Generate coverage report
+        run: bundle exec rspec spec/system --coverage-format=json
+      
+      - name: Post coverage comment
+        uses: ./
+        with:
+          unique-id-for-comment: 'rails-coverage'
+          title: 'System Tests Coverage'
+          coverage-file: coverage/coverage.json
+          test-results-path: coverage/rspec.xml
+          include-file-details: true
+          max-files-to-show: 15 

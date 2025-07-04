@@ -1,6 +1,9 @@
 const core = require('@actions/core');
 const xml2js = require('xml2js');
-const { getPathToFile, getContentFile, getCoverageColor } = require('./utils');
+const { getPathToFile, getContentFile, getCoverageColor } = require('../utils');
+
+// Check if running in CI environment
+const isCI = process.env.CI === 'true';
 
 // Parse SimpleCov XML coverage report
 const getCoverageXmlReport = async (options) => {
@@ -11,7 +14,9 @@ const getCoverageXmlReport = async (options) => {
     const content = getContentFile(xmlFilePath);
 
     if (!content) {
-      core.warning(`XML coverage file not found: ${xmlFilePath}`);
+      if (!isCI) {
+        core.warning(`XML coverage file not found: ${xmlFilePath}`);
+      }
       return { html: '', coverage: '0%', color: 'red', warnings: 0 };
     }
 
@@ -32,7 +37,9 @@ const getCoverageXmlReport = async (options) => {
 
     return { html, coverage: totalCoverage + '%', color, warnings: 0 };
   } catch (error) {
-    core.error(`Error parsing XML coverage report: ${error.message}`);
+    if (!isCI) {
+      core.error(`Error parsing XML coverage report: ${error.message}`);
+    }
     return { html: '', coverage: '0%', color: 'red', warnings: 0 };
   }
 };
@@ -135,7 +142,7 @@ const toHtmlFromXml = (data, options) => {
   const color = getCoverageColor(data.total);
   const coverage = data.total + '%';
 
-  const badgeUrl = `https://img.shields.io/badge/${badgeTitle}-${coverage}-${color}.svg`;
+  const badgeUrl = `https://img.shields.io/badge/${badgeTitle}-${coverage.replace('%', '%25')}-${color}.svg`;
   const badge = hideBadge
     ? ''
     : `<img alt="Coverage" src="${badgeUrl}" /><br/>`;
