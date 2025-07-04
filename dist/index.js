@@ -39926,7 +39926,7 @@ const getMultipleReport = (options) => {
       const title = parts[0];
       const coveragePath = parts[1];
 
-      const report = generateSingleReport({
+      const report = generateSingleReportAsync({
         ...options,
         coveragePath,
         title,
@@ -39941,18 +39941,16 @@ const getMultipleReport = (options) => {
 };
 
 // Generate a single report for multiple files
-const generateSingleReport = (options) => {
+const generateSingleReportAsync = async (options) => {
   const { coveragePath, coverageXmlPath } = options;
-
   try {
     let report;
-
     if (coverageXmlPath) {
-      report = getCoverageXmlReport(options);
+      report = await getCoverageXmlReport(options);
     } else {
       // Use ParserManager for JSON coverage
       const parserManager = new ParserManager();
-      const parsed = parserManager.autoDetectAndParse({
+      const parsed = await parserManager.autoDetectAndParse({
         coverageFile: coveragePath,
         includeFileDetails: false,
       });
@@ -39965,9 +39963,7 @@ const generateSingleReport = (options) => {
         report = { coverage: '0%', color: 'red' };
       }
     }
-
     const summaryReport = getSummaryReport(options);
-
     return {
       coverage: report.coverage,
       color: report.color,
@@ -40030,7 +40026,7 @@ const getStatusFromReport = (report) => {
 
 module.exports = {
   getMultipleReport,
-  generateSingleReport,
+  generateSingleReportAsync,
   toMultiRow,
   getStatusFromReport,
 };
@@ -40044,29 +40040,34 @@ module.exports = {
 const fs = __nccwpck_require__(9896);
 
 // Import existing parsers
-const { parseLastRun } = __nccwpck_require__(5975);
-const { parseTestResults } = __nccwpck_require__(3760);
-const { parseXml } = __nccwpck_require__(2028);
+const lastRunParser = __nccwpck_require__(5975);
+const testResultsParser = __nccwpck_require__(3760);
+const parseXmlParser = __nccwpck_require__(2028);
 
 // Import new SimpleCov parser
-const { parseSimpleCov } = __nccwpck_require__(9744);
+const simplecovParser = __nccwpck_require__(9744);
 
 /**
- * Main parser coordinator
- * Manages all coverage and test result parsers
+ * ParserManager coordinates all coverage and test result parsers.
+ * Use this class to parse coverage, last run, and test results in a unified way.
  */
 class ParserManager {
+  /**
+   *
+   */
   constructor() {
     this.parsers = {
-      lastRun: parseLastRun,
-      testResults: parseTestResults,
-      xml: parseXml,
-      simplecov: parseSimpleCov,
+      lastRun: lastRunParser.parseLastRun,
+      testResults: testResultsParser.getParsedTestResults,
+      xml: parseXmlParser.getCoverageXmlReport,
+      simplecov: simplecovParser.parseSimpleCovAsync,
     };
   }
 
   /**
    * Parse last run data from .last_run.json
+   * @param {string} filePath - Path to the .last_run.json file
+   * @returns {object|null} Parsed last run data or null if file doesn't exist
    */
   parseLastRun(filePath) {
     if (!fs.existsSync(filePath)) {
@@ -40077,38 +40078,56 @@ class ParserManager {
 
   /**
    * Parse test results from XML file
+   * @param {string} filePath - Path to the test results XML file
+   * @returns {Promise<object|null>} Parsed test results or null if file doesn't exist
    */
-  parseTestResults(filePath) {
+  async parseTestResults(filePath) {
     if (!fs.existsSync(filePath)) {
       return null;
     }
-    return this.parsers.testResults(filePath);
+    try {
+      return await this.parsers.testResults({ testResultsPath: filePath });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('Error parsing test results:', err);
+      return null;
+    }
   }
 
   /**
    * Parse XML files (legacy support)
+   * @param {string} filePath - Path to the XML coverage file
+   * @returns {Promise<object|null>} Parsed XML data or null if file doesn't exist
    */
-  parseXml(filePath) {
+  async parseXml(filePath) {
     if (!fs.existsSync(filePath)) {
       return null;
     }
-    return this.parsers.xml(filePath);
+    try {
+      return await this.parsers.xml({ coverageXmlPath: filePath });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('Error parsing XML coverage:', err);
+      return null;
+    }
   }
 
   /**
-   * Parse SimpleCov coverage data
+   * Parse SimpleCov coverage data (async)
+   * @param {string} filePath - Path to the SimpleCov coverage.json file
+   * @param {boolean} includeFileDetails - Whether to include individual file details
+   * @returns {Promise<object|null>} Parsed coverage data or null if file doesn't exist
    */
-  parseSimpleCov(filePath, includeFileDetails = false) {
-    if (!fs.existsSync(filePath)) {
-      return null;
-    }
-    return this.parsers.simplecov(filePath, includeFileDetails);
+  async parseSimpleCov(filePath, includeFileDetails = false) {
+    return await this.parsers.simplecov(filePath, includeFileDetails);
   }
 
   /**
    * Auto-detect and parse available coverage files
+   * @param {object} options - Configuration options for parsing
+   * @returns {Promise<object>} Results with keys: coverage, lastRun, testResults
    */
-  autoDetectAndParse(options = {}) {
+  async autoDetectAndParse(options = {}) {
     const results = {};
 
     // Check for SimpleCov coverage.json
@@ -40116,21 +40135,17 @@ class ParserManager {
     const includeFileDetails = options.includeFileDetails || false;
     const maxFilesToShow = options.maxFilesToShow || 50;
 
-    if (fs.existsSync(coverageFile)) {
-      results.coverage = this.parseSimpleCov(coverageFile, includeFileDetails);
-
-      // Limit file details if too many files
-      if (
-        results.coverage &&
-        results.coverage.files &&
-        results.coverage.files.length > maxFilesToShow
-      ) {
-        results.coverage.files = results.coverage.files.slice(
-          0,
-          maxFilesToShow,
-        );
-        results.coverage.filesTruncated = true;
-      }
+    results.coverage = await this.parseSimpleCov(
+      coverageFile,
+      includeFileDetails,
+    );
+    if (
+      results.coverage &&
+      results.coverage.files &&
+      results.coverage.files.length > maxFilesToShow
+    ) {
+      results.coverage.files = results.coverage.files.slice(0, maxFilesToShow);
+      results.coverage.filesTruncated = true;
     }
 
     // Check for .last_run.json
@@ -40142,7 +40157,7 @@ class ParserManager {
     // Check for test results
     const testResultsFile = options.testResultsFile || 'test-results.xml';
     if (fs.existsSync(testResultsFile)) {
-      results.testResults = this.parseTestResults(testResultsFile);
+      results.testResults = await this.parseTestResults(testResultsFile);
     }
 
     return results;
@@ -40160,6 +40175,9 @@ module.exports = ParserManager;
 const fs = __nccwpck_require__(9896);
 const path = __nccwpck_require__(6928);
 const core = __nccwpck_require__(7484);
+
+// Check if running in CI environment
+const isCI = process.env.CI === 'true';
 
 // Parse SimpleCov .last_run.json file
 const parseLastRun = (filePath) => {
@@ -40180,7 +40198,9 @@ const parseLastRun = (filePath) => {
       branch: data.result.branch || 0,
     };
   } catch (error) {
-    core.warning(`Failed to parse .last_run.json: ${error.message}`);
+    if (!isCI) {
+      core.warning(`Failed to parse .last_run.json: ${error.message}`);
+    }
     return null;
   }
 };
@@ -40266,6 +40286,9 @@ const core = __nccwpck_require__(7484);
 const xml2js = __nccwpck_require__(758);
 const { getPathToFile, getContentFile, getCoverageColor } = __nccwpck_require__(5804);
 
+// Check if running in CI environment
+const isCI = process.env.CI === 'true';
+
 // Parse SimpleCov XML coverage report
 const getCoverageXmlReport = async (options) => {
   const { coverageXmlPath } = options;
@@ -40275,7 +40298,9 @@ const getCoverageXmlReport = async (options) => {
     const content = getContentFile(xmlFilePath);
 
     if (!content) {
-      core.warning(`XML coverage file not found: ${xmlFilePath}`);
+      if (!isCI) {
+        core.warning(`XML coverage file not found: ${xmlFilePath}`);
+      }
       return { html: '', coverage: '0%', color: 'red', warnings: 0 };
     }
 
@@ -40296,7 +40321,9 @@ const getCoverageXmlReport = async (options) => {
 
     return { html, coverage: totalCoverage + '%', color, warnings: 0 };
   } catch (error) {
-    core.error(`Error parsing XML coverage report: ${error.message}`);
+    if (!isCI) {
+      core.error(`Error parsing XML coverage report: ${error.message}`);
+    }
     return { html: '', coverage: '0%', color: 'red', warnings: 0 };
   }
 };
@@ -40525,19 +40552,57 @@ module.exports = {
 const fs = __nccwpck_require__(9896);
 const path = __nccwpck_require__(6928);
 const core = __nccwpck_require__(7484);
+const { getContentFileAsync, fileExistsAsync } = __nccwpck_require__(5804);
+
+// Check if running in CI environment
+const isCI = process.env.CI === 'true';
+
+/**
+ * Async: Parse SimpleCov coverage.json file
+ * @param {string} filePath - Path to coverage.json file
+ * @param {boolean} includeFileDetails - Whether to include individual file details
+ * @returns {object} Parsed coverage data or null if error
+ */
+async function parseSimpleCovAsync(filePath, includeFileDetails = false) {
+  try {
+    if (!(await fileExistsAsync(filePath))) {
+      if (!isCI) {
+        core.warning(`SimpleCov coverage file not found: ${filePath}`);
+      }
+      return null;
+    }
+    const content = await getContentFileAsync(filePath);
+    const data = JSON.parse(content);
+    if (!validateSimpleCovData(data)) {
+      core.error(`Invalid SimpleCov JSON format in ${filePath}`);
+      return null;
+    }
+    const overall = calculateOverallSummary(data.files);
+    const groups = groupFilesByDirectory(data.files);
+    const files = includeFileDetails ? generateFileData(data.files) : null;
+    return { overall, groups, files };
+  } catch (error) {
+    if (!isCI) {
+      core.error(`Error parsing SimpleCov file ${filePath}: ${error.message}`);
+    }
+    return null;
+  }
+}
 
 /**
  * Parse SimpleCov coverage.json file
  * Based on the official SimpleCov JSON formatter format
  * @param {string} filePath - Path to coverage.json file
  * @param {boolean} includeFileDetails - Whether to include individual file details
- * @returns {Object} Parsed coverage data or null if error
+ * @returns {object} Parsed coverage data or null if error
  */
 function parseSimpleCov(filePath, includeFileDetails = false) {
   try {
     // Validate file exists
     if (!fs.existsSync(filePath)) {
-      core.warning(`SimpleCov coverage file not found: ${filePath}`);
+      if (!isCI) {
+        core.warning(`SimpleCov coverage file not found: ${filePath}`);
+      }
       return null;
     }
 
@@ -40562,14 +40627,16 @@ function parseSimpleCov(filePath, includeFileDetails = false) {
 
     return { overall, groups, files };
   } catch (error) {
-    core.error(`Error parsing SimpleCov file ${filePath}: ${error.message}`);
+    if (!isCI) {
+      core.error(`Error parsing SimpleCov file ${filePath}: ${error.message}`);
+    }
     return null;
   }
 }
 
 /**
  * Validate SimpleCov JSON data structure
- * @param {Object} data - Parsed JSON data
+ * @param {object} data - Parsed JSON data
  * @returns {boolean} True if valid SimpleCov format
  */
 function validateSimpleCovData(data) {
@@ -40595,7 +40662,7 @@ function validateSimpleCovData(data) {
 
 /**
  * Validate individual file data structure
- * @param {Object} file - File coverage data
+ * @param {object} file - File coverage data
  * @returns {boolean} True if valid file format
  */
 function validateFileData(file) {
@@ -40638,10 +40705,10 @@ function validateFileData(file) {
 /**
  * Calculate overall summary from all files
  * @param {Array} files - Array of file coverage data
- * @returns {Object} Overall summary
+ * @returns {object} Overall summary
  */
 function calculateOverallSummary(files) {
-  let totalFiles = files.length;
+  const totalFiles = files.length;
   let totalLines = 0;
   let coveredLines = 0;
   let totalBranches = 0;
@@ -40683,8 +40750,8 @@ function calculateOverallSummary(files) {
 
 /**
  * Calculate branch coverage for a file
- * @param {Object} branches - Branch coverage data
- * @returns {Object} Branch summary
+ * @param {object} branches - Branch coverage data
+ * @returns {object} Branch summary
  */
 function calculateBranchCoverage(branches) {
   let total = 0;
@@ -40829,6 +40896,7 @@ function extractMissedLines(lineCoverage) {
 
 module.exports = {
   parseSimpleCov,
+  parseSimpleCovAsync,
   calculateOverallSummary,
   groupFilesByDirectory,
   generateFileData,
@@ -40844,6 +40912,9 @@ const core = __nccwpck_require__(7484);
 const xml2js = __nccwpck_require__(758);
 const { getPathToFile, getContentFile, formatTime } = __nccwpck_require__(5804);
 
+// Check if running in CI environment
+const isCI = process.env.CI === 'true';
+
 // Parse test results from XML file
 const getParsedTestResults = async (options) => {
   const { testResultsPath } = options;
@@ -40857,7 +40928,9 @@ const getParsedTestResults = async (options) => {
     const content = getContentFile(xmlFilePath);
 
     if (!content) {
-      core.warning(`Test results file not found: ${xmlFilePath}`);
+      if (!isCI) {
+        core.warning(`Test results file not found: ${xmlFilePath}`);
+      }
       return { errors: 0, failures: 0, skipped: 0, tests: 0, time: 0 };
     }
 
@@ -40872,11 +40945,15 @@ const getParsedTestResults = async (options) => {
     } else if (result.rspec) {
       return parseRSpecFormat(result.rspec);
     } else {
-      core.warning('Unknown test results format');
+      if (!isCI) {
+        core.warning('Unknown test results format');
+      }
       return { errors: 0, failures: 0, skipped: 0, tests: 0, time: 0 };
     }
   } catch (error) {
-    core.error(`Error parsing test results: ${error.message}`);
+    if (!isCI) {
+      core.error(`Error parsing test results: ${error.message}`);
+    }
     return { errors: 0, failures: 0, skipped: 0, tests: 0, time: 0 };
   }
 };
@@ -40993,9 +41070,9 @@ const getNotSuccessTestInfo = async (options) => {
     const parser = new xml2js.Parser();
     const result = await parser.parseStringPromise(content);
 
-    let failures = [];
-    let errors = [];
-    let skipped = [];
+    const failures = [];
+    const errors = [];
+    const skipped = [];
 
     // Parse JUnit format
     if (result.testsuites) {
@@ -41065,12 +41142,25 @@ const getPathToFile = (filePath) => {
   return path.resolve(process.cwd(), filePath);
 };
 
-// Read file content
+// Async read file content
+const getContentFileAsync = async (filePath) => {
+  if (!filePath) {
+    return null;
+  }
+  try {
+    await fs.promises.access(filePath, fs.constants.F_OK);
+    return await fs.promises.readFile(filePath, 'utf8');
+  } catch (error) {
+    core.error(`Error reading file ${filePath}: ${error.message}`);
+    return null;
+  }
+};
+
+// Sync read file content (legacy)
 const getContentFile = (filePath) => {
   if (!filePath || !fs.existsSync(filePath)) {
     return null;
   }
-
   try {
     return fs.readFileSync(filePath, 'utf8');
   } catch (error) {
@@ -41124,7 +41214,17 @@ const formatTime = (seconds) => {
   }
 };
 
-// Check if a file exists
+// Async check if a file exists
+const fileExistsAsync = async (filePath) => {
+  try {
+    await fs.promises.access(filePath, fs.constants.F_OK);
+    return true;
+  } catch (error) {
+    return false;
+  }
+};
+
+// Sync check if a file exists (legacy)
 const fileExists = (filePath) => {
   try {
     return fs.existsSync(filePath);
@@ -41153,10 +41253,12 @@ const sanitizeHtml = (html) => {
 module.exports = {
   getPathToFile,
   getContentFile,
+  getContentFileAsync,
   getCoverageColor,
   extractPercentage,
   formatTime,
   fileExists,
+  fileExistsAsync,
   getFileExtension,
   sanitizeHtml,
 };
@@ -43122,9 +43224,10 @@ const generateCoverageSummary = (coverageData, options = {}) => {
   if (!coverageData) return '';
 
   const { overall, groups } = coverageData;
-  const { title = 'Coverage Report', hideBadge = false } = options;
+  const { title = 'Coverage Report' } = options;
 
   let html = '## ' + title + '\n\n';
+  html += 'Code coverage analysis completed successfully.\n\n';
 
   // Overall summary
   html += '### Overall Summary\n\n';
@@ -43137,7 +43240,8 @@ const generateCoverageSummary = (coverageData, options = {}) => {
   html += '| **Coverage** | **' + overall.percentage + '%** |\n';
 
   if (overall.branches) {
-    html += '| **Branch Coverage** | **' + overall.branches.percentage + '%** |\n';
+    html +=
+      '| **Branch Coverage** | **' + overall.branches.percentage + '%** |\n';
   }
 
   html += '\n';
@@ -43147,11 +43251,24 @@ const generateCoverageSummary = (coverageData, options = {}) => {
     html += '### Coverage by Category\n\n';
     html += '| Category | Files | Lines | Covered | Missed | Coverage |\n';
     html += '|----------|-------|-------|---------|--------|----------|\n';
-    
-    groups.forEach(group => {
-      html += '| ' + group.name + ' | ' + group.files + ' | ' + group.lines + ' | ' + group.covered + ' | ' + group.missed + ' | ' + group.percentage + '% |\n';
+
+    groups.forEach((group) => {
+      html +=
+        '| ' +
+        group.name +
+        ' | ' +
+        group.files +
+        ' | ' +
+        group.lines +
+        ' | ' +
+        group.covered +
+        ' | ' +
+        group.missed +
+        ' | ' +
+        group.percentage +
+        '% |\n';
     });
-    
+
     html += '\n';
   }
 
@@ -43166,15 +43283,30 @@ const generateFileDetails = (coverageData, options = {}) => {
   const { maxFilesToShow = 50 } = options;
 
   let html = '### File Coverage Details\n\n';
+  html += 'Individual file coverage breakdown:\n\n';
   html += '| File | Lines | Covered | Missed | Coverage |\n';
   html += '|------|-------|---------|--------|----------|\n';
 
-  files.forEach(file => {
-    html += '| `' + file.name + '` | ' + file.lines + ' | ' + file.covered + ' | ' + file.missed + ' | ' + file.percentage + '% |\n';
+  files.forEach((file) => {
+    html +=
+      '| `' +
+      file.name +
+      '` | ' +
+      file.lines +
+      ' | ' +
+      file.covered +
+      ' | ' +
+      file.missed +
+      ' | ' +
+      file.percentage +
+      '% |\n';
   });
 
   if (filesTruncated) {
-    html += '\n*Showing first ' + maxFilesToShow + ' files. Enable `include-file-details: true` to see all files.*\n';
+    html +=
+      '\n*Showing first ' +
+      maxFilesToShow +
+      ' files. Enable `include-file-details: true` to see all files.*\n';
   }
 
   html += '\n';
@@ -43186,14 +43318,24 @@ const generateLastRunSection = (lastRunData, options = {}) => {
   if (!lastRunData) return '';
   const { title = 'Last Run Coverage', hideBadge = false } = options;
   const { line, branch } = lastRunData;
-  
+
   let html = '## ' + title + '\n\n';
-  
+
   if (!hideBadge) {
-    html += '![Line Coverage](https://img.shields.io/badge/Line-' + line.toFixed(1) + '%25-' + getCoverageColor(line) + ')\n';
-    html += '![Branch Coverage](https://img.shields.io/badge/Branch-' + branch.toFixed(1) + '%25-' + getCoverageColor(branch) + ')\n\n';
+    html +=
+      '![Line Coverage](https://img.shields.io/badge/Line-' +
+      line.toFixed(1) +
+      '%25-' +
+      getCoverageColor(line) +
+      ')\n';
+    html +=
+      '![Branch Coverage](https://img.shields.io/badge/Branch-' +
+      branch.toFixed(1) +
+      '%25-' +
+      getCoverageColor(branch) +
+      ')\n\n';
   }
-  
+
   html += '| Coverage Type | Percentage |\n';
   html += '|---------------|------------|\n';
   html += '| Line | ' + line.toFixed(1) + '% |\n';
@@ -43204,15 +43346,24 @@ const generateLastRunSection = (lastRunData, options = {}) => {
 // Generate test results HTML
 const generateTestResultsSection = (testResults, options = {}) => {
   if (!testResults) return '';
-  const { title = 'Test Results', tests, errors, failures, skipped, time } = testResults;
+  const { title = 'Test Results' } = options;
+  const { tests, errors, failures, skipped, time } = testResults;
+
   let html = '## ' + title + '\n\n';
-  html += '| Metric | Value |\n';
-  html += '|--------|-------|\n';
-  html += '| Tests | ' + tests + ' |\n';
-  html += '| Errors | ' + errors + ' |\n';
-  html += '| Failures | ' + failures + ' |\n';
-  html += '| Skipped | ' + skipped + ' |\n';
-  html += '| Time | ' + time + 's |\n\n';
+  html += '**Test Execution Summary:**\n\n';
+  html += '📊 **Total Tests:** ' + tests + '\n';
+  html += '❌ **Failures:** ' + failures + '\n';
+  html += '⚠️ **Errors:** ' + errors + '\n';
+  html += '⏭️ **Skipped:** ' + skipped + '\n';
+  html += '⏱️ **Execution Time:** ' + time + 's\n\n';
+
+  // Add status summary
+  if (failures === 0 && errors === 0) {
+    html += '✅ **Status:** All tests passed successfully!\n\n';
+  } else {
+    html += '❌ **Status:** Some tests failed or encountered errors.\n\n';
+  }
+
   return html;
 };
 
@@ -43257,32 +43408,54 @@ const createOrEditComment = async (
 const main = async () => {
   const token = core.getInput('github-token', { required: true });
   const title = core.getInput('title', { required: false });
-  const badgeTitle = core.getInput('badge-title', { required: false });
+
   const hideBadge = core.getBooleanInput('hide-badge', { required: false });
   const hideReport = core.getBooleanInput('hide-report', { required: false });
   const coverageFile = core.getInput('coverage-file', { required: false });
-  const includeFileDetails = core.getBooleanInput('include-file-details', { required: false });
-  const maxFilesToShow = parseInt(core.getInput('max-files-to-show', { required: false })) || 50;
-  const includeLastRun = core.getBooleanInput('include-last-run', { required: false });
-  const lastRunTitle = core.getInput('last-run-title', { required: false }) || 'Last Run Coverage';
-  const testResultsPath = core.getInput('test-results-path', { required: false });
-  const testResultsTitle = core.getInput('test-results-title', { required: false }) || 'Test Results';
+  const includeFileDetails = core.getBooleanInput('include-file-details', {
+    required: false,
+  });
+  const maxFilesToShow =
+    parseInt(core.getInput('max-files-to-show', { required: false })) || 50;
+  const includeLastRun = core.getBooleanInput('include-last-run', {
+    required: false,
+  });
+  const lastRunTitle =
+    core.getInput('last-run-title', { required: false }) || 'Last Run Coverage';
+  const testResultsPath = core.getInput('test-results-path', {
+    required: false,
+  });
+  const testResultsTitle =
+    core.getInput('test-results-title', { required: false }) || 'Test Results';
   const issueNumberInput = core.getInput('issue-number', { required: false });
   const hideComment = core.getBooleanInput('hide-comment', { required: false });
-  const createNewComment = core.getBooleanInput('create-new-comment', { required: false });
-  const uniqueIdForComment = core.getInput('unique-id-for-comment', { required: false });
-  const multipleFiles = core.getMultilineInput('multiple-files', { required: false });
+  const createNewComment = core.getBooleanInput('create-new-comment', {
+    required: false,
+  });
+  const uniqueIdForComment = core.getInput('unique-id-for-comment', {
+    required: false,
+  });
+  const multipleFiles = core.getMultilineInput('multiple-files', {
+    required: false,
+  });
 
   const { context, repository } = github;
   const { repo, owner } = context.repo;
   const { eventName, payload } = context;
-  const watermarkUniqueId = uniqueIdForComment ? '| ' + uniqueIdForComment + ' ' : '';
-  const WATERMARK = '<!-- Rails Coverage Comment: ' + context.job + ' ' + watermarkUniqueId + '-->\n';
+  const watermarkUniqueId = uniqueIdForComment
+    ? '| ' + uniqueIdForComment + ' '
+    : '';
+  const WATERMARK =
+    '<!-- Rails Coverage Comment: ' +
+    context.job +
+    ' ' +
+    watermarkUniqueId +
+    '-->\n';
   let finalHtml = '';
 
   // Initialize parser manager and parse all available data
   const parserManager = new ParserManager();
-  const parsedData = parserManager.autoDetectAndParse({
+  const parsedData = await parserManager.autoDetectAndParse({
     coverageFile: coverageFile,
     includeFileDetails: includeFileDetails,
     maxFilesToShow: maxFilesToShow,
@@ -43293,6 +43466,7 @@ const main = async () => {
   // Generate coverage section
   let coverageHtml = '';
   if (parsedData.coverage && !hideReport) {
+    core.info('Coverage data found and report not hidden');
     coverageHtml = generateCoverageSummary(parsedData.coverage, {
       title: title,
       hideBadge: hideBadge,
@@ -43308,23 +43482,32 @@ const main = async () => {
     core.setOutput('coverage', overall.percentage + '%');
     core.setOutput('color', getCoverageColor(parseFloat(overall.percentage)));
     core.setOutput('warnings', '0');
+  } else {
+    core.info('Coverage data not found or report is hidden');
+    core.info('parsedData.coverage:', !!parsedData.coverage);
+    core.info('hideReport:', hideReport);
   }
 
   // Generate last run section
   let lastRunHtml = '';
   if (includeLastRun && parsedData.lastRun) {
-    lastRunHtml = generateLastRunSection(parsedData.lastRun, { 
+    lastRunHtml = generateLastRunSection(parsedData.lastRun, {
       title: lastRunTitle,
-      hideBadge: hideBadge 
+      hideBadge: hideBadge,
     });
     core.setOutput('line-coverage', parsedData.lastRun.line.toFixed(1) + '%');
-    core.setOutput('branch-coverage', parsedData.lastRun.branch.toFixed(1) + '%');
+    core.setOutput(
+      'branch-coverage',
+      parsedData.lastRun.branch.toFixed(1) + '%',
+    );
   }
 
   // Generate test results section
   let testResultsHtml = '';
   if (parsedData.testResults) {
-    testResultsHtml = generateTestResultsSection(parsedData.testResults, { title: testResultsTitle });
+    testResultsHtml = generateTestResultsSection(parsedData.testResults, {
+      title: testResultsTitle,
+    });
     // Set test results outputs
     const { errors, failures, skipped, tests, time } = parsedData.testResults;
     const valuesToExport = { errors, failures, skipped, tests, time };
@@ -43347,10 +43530,20 @@ const main = async () => {
   }
 
   // Check comment length
-  const totalLength = coverageHtml.length + lastRunHtml.length + testResultsHtml.length + multipleFilesHtml.length;
-  if (totalLength > MAX_COMMENT_LENGTH && eventName !== 'workflow_dispatch' && eventName !== 'workflow_run') {
+  const totalLength =
+    coverageHtml.length +
+    lastRunHtml.length +
+    testResultsHtml.length +
+    multipleFilesHtml.length;
+  if (
+    totalLength > MAX_COMMENT_LENGTH &&
+    eventName !== 'workflow_dispatch' &&
+    eventName !== 'workflow_run'
+  ) {
     core.warning(
-      'Your comment is too long (maximum is ' + MAX_COMMENT_LENGTH + ' characters), some sections will be truncated.',
+      'Your comment is too long (maximum is ' +
+        MAX_COMMENT_LENGTH +
+        ' characters), some sections will be truncated.',
     );
     core.warning(
       'Try adding "hide-report: true" or "include-file-details: false" to reduce comment size.',
@@ -43358,7 +43551,16 @@ const main = async () => {
   }
 
   // Combine all sections
-  finalHtml = WATERMARK + coverageHtml + testResultsHtml + lastRunHtml + multipleFilesHtml;
+  finalHtml =
+    WATERMARK +
+    '\n\n' +
+    coverageHtml +
+    '\n\n' +
+    testResultsHtml +
+    '\n\n' +
+    lastRunHtml +
+    '\n\n' +
+    multipleFilesHtml;
 
   // Post comment if not hidden
   if (!hideComment && finalHtml) {
@@ -43403,7 +43605,8 @@ const main = async () => {
 // Run the main function
 main().catch((error) => {
   core.setFailed(error.message);
-}); 
+});
+
 module.exports = __webpack_exports__;
 /******/ })()
 ;

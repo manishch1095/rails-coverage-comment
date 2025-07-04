@@ -1,6 +1,6 @@
 {
   "name": "rails-coverage-comment",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "Comments a pull request with the Rails code coverage badge, full report and tests summary",
   "author": "Manish Chauhan",
   "license": "MIT",
