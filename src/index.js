@@ -144,7 +144,7 @@ const generateTestResultsSection = (testResults, options = {}) => {
   if (!testResults) return '';
   const { title = 'Test Results' } = options;
   const { tests, errors, failures, skipped, time } = testResults;
-  
+
   let html = '## ' + title + '\n\n';
   html += '**Test Execution Summary:**\n\n';
   html += '📊 **Total Tests:** ' + tests + '\n';
@@ -152,14 +152,14 @@ const generateTestResultsSection = (testResults, options = {}) => {
   html += '⚠️ **Errors:** ' + errors + '\n';
   html += '⏭️ **Skipped:** ' + skipped + '\n';
   html += '⏱️ **Execution Time:** ' + time + 's\n\n';
-  
+
   // Add status summary
   if (failures === 0 && errors === 0) {
     html += '✅ **Status:** All tests passed successfully!\n\n';
   } else {
     html += '❌ **Status:** Some tests failed or encountered errors.\n\n';
   }
-  
+
   return html;
 };
 
