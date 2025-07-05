@@ -414,7 +414,11 @@ const main = async () => {
     // Check if we should show only changed files
     if (reportOnlyChangedFiles && eventName === 'pull_request') {
       const issue_number = issueNumberInput || payload.pull_request?.number;
+      core.info(
+        '[generateChangedFilesCoverage] Issue number: ' + issue_number,
+      );
       if (issue_number) {
+        core.info('[generateChangedFilesCoverage] Issue number found');
         const octokit = github.getOctokit(token);
         const changedFiles = await getChangedFiles(
           octokit,
@@ -422,8 +426,13 @@ const main = async () => {
           repo,
           issue_number,
         );
+        core.info(
+          '[generateChangedFilesCoverage] Changed files: ' +
+            JSON.stringify(changedFiles),
+        );
 
         if (changedFiles.length > 0) {
+          core.info('[generateChangedFilesCoverage] Changed files found');
           coverageHtml = generateChangedFilesCoverage(
             parsedData.coverage,
             changedFiles,
@@ -440,6 +449,10 @@ const main = async () => {
                     file.name.includes(changedFile) ||
                     changedFile.includes(file.name),
                 ),
+            );
+            core.info(
+              '[generateChangedFilesCoverage] Changed files coverage: ' +
+                JSON.stringify(changedFilesCoverage),
             );
             if (changedFilesCoverage.length > 0) {
               const totalLines = changedFilesCoverage.reduce(
@@ -459,9 +472,11 @@ const main = async () => {
                 'color',
                 getCoverageColor(parseFloat(totalPercentage)),
               );
+              core.info('[generateCoverageSummary] Coverage summary: ' + coverageHtml);
             }
           }
         } else {
+          core.info('[generateCoverageSummary] No changed files found');
           coverageHtml = generateCoverageSummary(parsedData.coverage, {
             title: title,
             hideBadge: hideBadge,
@@ -469,12 +484,14 @@ const main = async () => {
           });
         }
       } else {
+        core.info('[generateCoverageSummary] No issue number found');
         coverageHtml = generateCoverageSummary(parsedData.coverage, {
           title: title,
           hideBadge: hideBadge,
         });
       }
     } else {
+      core.info('[generateCoverageSummary] No changed files found');
       coverageHtml = generateCoverageSummary(parsedData.coverage, {
         title: title,
         hideBadge: hideBadge,
@@ -489,8 +506,13 @@ const main = async () => {
 
       // Add changed files details if requested and in PR context
       if (includeChangedFilesDetails && eventName === 'pull_request') {
+        core.info('[generateChangedFilesCoverage] Include changed files details');
         const issue_number = issueNumberInput || payload.pull_request?.number;
+        core.info(
+          '[generateChangedFilesCoverage] Issue number: ' + issue_number,
+        );
         if (issue_number) {
+          core.info('[generateChangedFilesCoverage] Issue number found');
           const octokit = github.getOctokit(token);
           const changedFiles = await getChangedFiles(
             octokit,
@@ -500,6 +522,7 @@ const main = async () => {
           );
 
           if (changedFiles.length > 0 && parsedData.coverage.files) {
+            core.info('[generateChangedFilesCoverage] Changed files found');
             const changedFilesHtml = generateChangedFilesCoverage(
               parsedData.coverage,
               changedFiles,
@@ -510,6 +533,7 @@ const main = async () => {
             if (changedFilesHtml) {
               coverageHtml += '\n\n' + changedFilesHtml;
             }
+            core.info('[generateChangedFilesCoverage] Changed files HTML: ' + changedFilesHtml);
           }
         }
       }
