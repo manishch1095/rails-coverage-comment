@@ -112,8 +112,17 @@ const generateChangedFilesCoverage = (
   options = {},
 ) => {
   if (!coverageData || !coverageData.files || !changedFiles.length) {
+    core.info(
+      '[generateChangedFilesCoverage] Not invoked: missing data or no changed files',
+    );
     return '';
   }
+
+  core.info('[generateChangedFilesCoverage] Invoked!');
+  core.info(
+    '[generateChangedFilesCoverage] Changed files from PR: ' +
+      JSON.stringify(changedFiles),
+  );
 
   const { title = 'Changed Files Coverage' } = options;
 
@@ -123,6 +132,11 @@ const generateChangedFilesCoverage = (
       (changedFile) =>
         file.name.includes(changedFile) || changedFile.includes(file.name),
     ),
+  );
+
+  core.info(
+    '[generateChangedFilesCoverage] Files included in output: ' +
+      JSON.stringify(changedFilesCoverage.map((f) => f.name)),
   );
 
   if (changedFilesCoverage.length === 0) {
@@ -656,3 +670,7 @@ const main = async () => {
 main().catch((error) => {
   core.setFailed(error.message);
 });
+
+module.exports = {
+  generateChangedFilesCoverage,
+};
