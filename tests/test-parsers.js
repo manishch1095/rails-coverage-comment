@@ -1,8 +1,8 @@
 const path = require('path');
-const lastRunParser = require('./src/parsers/lastRun');
-const testResultsParser = require('./src/parsers/testResults');
-const simplecovParser = require('./src/parsers/simplecov');
-const parseXmlParser = require('./src/parsers/parseXml');
+const lastRunParser = require('../src/parsers/lastRun');
+const testResultsParser = require('../src/parsers/testResults');
+const simplecovParser = require('../src/parsers/simplecov');
+const parseXmlParser = require('../src/parsers/parseXml');
 
 // Check if running in CI environment
 const isCI = process.env.CI === 'true';

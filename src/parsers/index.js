@@ -1,4 +1,5 @@
 const fs = require('fs');
+const core = require('@actions/core');
 
 // Import existing parsers
 const lastRunParser = require('./lastRun');
@@ -49,8 +50,7 @@ class ParserManager {
     try {
       return await this.parsers.testResults({ testResultsPath: filePath });
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('Error parsing test results:', err);
+      core.error('Error parsing test results: ' + err.message);
       return null;
     }
   }
@@ -67,8 +67,7 @@ class ParserManager {
     try {
       return await this.parsers.xml({ coverageXmlPath: filePath });
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('Error parsing XML coverage:', err);
+      core.error('Error parsing XML coverage: ' + err.message);
       return null;
     }
   }

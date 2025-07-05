@@ -131,6 +131,16 @@ inputs:
     default: 'Last Run Coverage'
     required: false
 
+  include-category-summary:
+    description: 'Include the "Coverage by Category" section in the PR comment'
+    default: 'true'
+    required: false
+
+  include-changed-files-details:
+    description: 'Include coverage details for files changed in this PR'
+    default: 'false'
+    required: false
+
 outputs:
   coverage:
     description: 'value indicating the coverage percentage of your report based on SimpleCov, example 85.5%'

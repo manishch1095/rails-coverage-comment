@@ -40038,6 +40038,7 @@ module.exports = {
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 const fs = __nccwpck_require__(9896);
+const core = __nccwpck_require__(7484);
 
 // Import existing parsers
 const lastRunParser = __nccwpck_require__(5975);
@@ -40088,8 +40089,7 @@ class ParserManager {
     try {
       return await this.parsers.testResults({ testResultsPath: filePath });
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('Error parsing test results:', err);
+      core.error('Error parsing test results: ' + err.message);
       return null;
     }
   }
@@ -40106,8 +40106,7 @@ class ParserManager {
     try {
       return await this.parsers.xml({ coverageXmlPath: filePath });
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('Error parsing XML coverage:', err);
+      core.error('Error parsing XML coverage: ' + err.message);
       return null;
     }
   }
@@ -43209,6 +43208,34 @@ const { getMultipleReport } = __nccwpck_require__(7221);
 
 const MAX_COMMENT_LENGTH = 65536;
 
+/**
+ * Fetch changed files for the current PR
+ * @param {object} octokit - GitHub API client
+ * @param {string} owner - Repository owner
+ * @param {string} repo - Repository name
+ * @param {number} prNumber - Pull request number
+ * @returns {Promise<Array<string>>} Array of changed file paths
+ */
+const getChangedFiles = async (octokit, owner, repo, prNumber) => {
+  try {
+    const { data: files } = await octokit.pulls.listFiles({
+      owner,
+      repo,
+      pull_number: prNumber,
+    });
+    
+    // Filter for Ruby files only
+    const rubyFiles = files
+      .filter(file => file.filename.endsWith('.rb'))
+      .map(file => file.filename);
+    
+    return rubyFiles;
+  } catch (error) {
+    core.warning('Could not fetch changed files: ' + error.message);
+    return [];
+  }
+};
+
 // Get coverage color based on percentage
 const getCoverageColor = (percentage) => {
   if (percentage >= 90) return 'brightgreen';
@@ -43224,7 +43251,7 @@ const generateCoverageSummary = (coverageData, options = {}) => {
   if (!coverageData) return '';
 
   const { overall, groups } = coverageData;
-  const { title = 'Coverage Report' } = options;
+  const { title = 'Coverage Report', includeCategorySummary = true } = options;
 
   let html = '## ' + title + '\n\n';
   html += 'Code coverage analysis completed successfully.\n\n';
@@ -43246,8 +43273,8 @@ const generateCoverageSummary = (coverageData, options = {}) => {
 
   html += '\n';
 
-  // Group breakdown
-  if (groups && groups.length > 0) {
+  // Group breakdown (configurable)
+  if (includeCategorySummary && groups && groups.length > 0) {
     html += '### Coverage by Category\n\n';
     html += '| Category | Files | Lines | Covered | Missed | Coverage |\n';
     html += '|----------|-------|-------|---------|--------|----------|\n';
@@ -43272,6 +43299,75 @@ const generateCoverageSummary = (coverageData, options = {}) => {
     html += '\n';
   }
 
+  return html;
+};
+
+/**
+ * Generate coverage summary for changed files only
+ * @param {object} coverageData - Coverage data from SimpleCov
+ * @param {Array<string>} changedFiles - Array of changed file paths
+ * @param {object} options - Options for formatting
+ * @returns {string} HTML string for changed files coverage
+ */
+const generateChangedFilesCoverage = (coverageData, changedFiles, options = {}) => {
+  if (!coverageData || !coverageData.files || !changedFiles.length) {
+    return '';
+  }
+
+  const { title = 'Changed Files Coverage' } = options;
+  
+  // Filter coverage data to only include changed files
+  const changedFilesCoverage = coverageData.files.filter(file => 
+    changedFiles.some(changedFile => 
+      file.name.includes(changedFile) || changedFile.includes(file.name)
+    )
+  );
+
+  if (changedFilesCoverage.length === 0) {
+    return '';
+  }
+
+  // Calculate totals for changed files
+  const totalLines = changedFilesCoverage.reduce((sum, file) => sum + file.lines, 0);
+  const totalCovered = changedFilesCoverage.reduce((sum, file) => sum + file.covered, 0);
+  const totalMissed = changedFilesCoverage.reduce((sum, file) => sum + file.missed, 0);
+  const totalPercentage = totalLines > 0 ? ((totalCovered / totalLines) * 100).toFixed(2) : '0.00';
+
+  let html = '## ' + title + '\n\n';
+  html += 'Coverage analysis for files changed in this PR:\n\n';
+
+  // Summary for changed files
+  html += '### Changed Files Summary\n\n';
+  html += '| Metric | Value |\n';
+  html += '|--------|-------|\n';
+  html += '| Files Changed | ' + changedFilesCoverage.length + ' |\n';
+  html += '| Lines Changed | ' + totalLines + ' |\n';
+  html += '| Covered | ' + totalCovered + ' |\n';
+  html += '| Missed | ' + totalMissed + ' |\n';
+  html += '| **Coverage** | **' + totalPercentage + '%** |\n\n';
+
+  // Individual file details
+  html += '### Changed Files Details\n\n';
+  html += '| File | Lines | Covered | Missed | Coverage |\n';
+  html += '|------|-------|---------|--------|----------|\n';
+
+  changedFilesCoverage.forEach((file) => {
+    const status = file.percentage === 100 ? '✅' : file.percentage >= 80 ? '⚠️' : '❌';
+    html +=
+      '| ' + status + ' `' +
+      file.name +
+      '` | ' +
+      file.lines +
+      ' | ' +
+      file.covered +
+      ' | ' +
+      file.missed +
+      ' | ' +
+      file.percentage +
+      '% |\n';
+  });
+
+  html += '\n';
   return html;
 };
 
@@ -43438,6 +43534,15 @@ const main = async () => {
   const multipleFiles = core.getMultilineInput('multiple-files', {
     required: false,
   });
+  const reportOnlyChangedFiles = core.getBooleanInput('report-only-changed-files', {
+    required: false,
+  });
+  const includeCategorySummary = core.getBooleanInput('include-category-summary', {
+    required: false,
+  });
+  const includeChangedFilesDetails = core.getBooleanInput('include-changed-files-details', {
+    required: false,
+  });
 
   const { context, repository } = github;
   const { repo, owner } = context.repo;
@@ -43467,21 +43572,88 @@ const main = async () => {
   let coverageHtml = '';
   if (parsedData.coverage && !hideReport) {
     core.info('Coverage data found and report not hidden');
-    coverageHtml = generateCoverageSummary(parsedData.coverage, {
-      title: title,
-      hideBadge: hideBadge,
-    });
-    // Add file details if requested
-    if (includeFileDetails && parsedData.coverage.files) {
-      coverageHtml += generateFileDetails(parsedData.coverage, {
-        maxFilesToShow: maxFilesToShow,
+    
+    // Check if we should show only changed files
+    if (reportOnlyChangedFiles && eventName === 'pull_request') {
+      const issue_number = issueNumberInput || payload.pull_request?.number;
+      if (issue_number) {
+        const octokit = github.getOctokit(token);
+        const changedFiles = await getChangedFiles(octokit, owner, repo, issue_number);
+        
+        if (changedFiles.length > 0) {
+          coverageHtml = generateChangedFilesCoverage(parsedData.coverage, changedFiles, {
+            title: title,
+          });
+          // Set coverage outputs for changed files
+          if (parsedData.coverage.files) {
+            const changedFilesCoverage = parsedData.coverage.files.filter(file => 
+              changedFiles.some(changedFile => 
+                file.name.includes(changedFile) || changedFile.includes(file.name)
+              )
+            );
+            if (changedFilesCoverage.length > 0) {
+              const totalLines = changedFilesCoverage.reduce((sum, file) => sum + file.lines, 0);
+              const totalCovered = changedFilesCoverage.reduce((sum, file) => sum + file.covered, 0);
+              const totalPercentage = totalLines > 0 ? ((totalCovered / totalLines) * 100).toFixed(2) : '0.00';
+              core.setOutput('coverage', totalPercentage + '%');
+              core.setOutput('color', getCoverageColor(parseFloat(totalPercentage)));
+            }
+          }
+        } else {
+          coverageHtml = generateCoverageSummary(parsedData.coverage, {
+            title: title,
+            hideBadge: hideBadge,
+            includeCategorySummary: includeCategorySummary,
+          });
+        }
+      } else {
+        coverageHtml = generateCoverageSummary(parsedData.coverage, {
+          title: title,
+          hideBadge: hideBadge,
+        });
+      }
+    } else {
+      coverageHtml = generateCoverageSummary(parsedData.coverage, {
+        title: title,
+        hideBadge: hideBadge,
+        includeCategorySummary: includeCategorySummary,
       });
+      // Add file details if requested
+      if (includeFileDetails && parsedData.coverage.files) {
+        coverageHtml += generateFileDetails(parsedData.coverage, {
+          maxFilesToShow: maxFilesToShow,
+        });
+      }
+      
+      // Add changed files details if requested and in PR context
+      if (includeChangedFilesDetails && eventName === 'pull_request') {
+        const issue_number = issueNumberInput || payload.pull_request?.number;
+        if (issue_number) {
+          const octokit = github.getOctokit(token);
+          const changedFiles = await getChangedFiles(octokit, owner, repo, issue_number);
+          
+          if (changedFiles.length > 0 && parsedData.coverage.files) {
+            const changedFilesHtml = generateChangedFilesCoverage(parsedData.coverage, changedFiles, {
+              title: 'Changed Files Coverage',
+            });
+            if (changedFilesHtml) {
+              coverageHtml += '\n\n' + changedFilesHtml;
+            }
+          }
+        }
+      }
     }
-    // Set coverage outputs
+    
+      // Set coverage outputs (fallback to overall if not set above)
+  if (!reportOnlyChangedFiles || eventName !== 'pull_request') {
     const { overall } = parsedData.coverage;
     core.setOutput('coverage', overall.percentage + '%');
     core.setOutput('color', getCoverageColor(parseFloat(overall.percentage)));
-    core.setOutput('warnings', '0');
+  }
+  core.setOutput('warnings', '0');
+  
+  // Set coverageHtml output
+  core.setOutput('coverageHtml', coverageHtml);
   } else {
     core.info('Coverage data not found or report is hidden');
     core.info('parsedData.coverage:', !!parsedData.coverage);
@@ -43514,6 +43686,25 @@ const main = async () => {
     Object.entries(valuesToExport).forEach(([key, value]) => {
       core.info(key + ': ' + value);
       core.setOutput(key, value);
+    });
+    
+    // Set summaryReport output
+    const { getSummaryReport } = __nccwpck_require__(3760);
+    const summaryReport = getSummaryReport({
+      title: testResultsTitle,
+      testResultsPath: testResultsPath || 'test-results.xml',
+    });
+    core.setOutput('summaryReport', summaryReport);
+    
+    // Set notSuccessTestInfo output
+    const { getNotSuccessTestInfo } = __nccwpck_require__(3760);
+    getNotSuccessTestInfo({
+      testResultsPath: testResultsPath || 'test-results.xml',
+    }).then((notSuccessInfo) => {
+      core.setOutput('notSuccessTestInfo', JSON.stringify(notSuccessInfo));
+    }).catch((error) => {
+      core.warning(`Failed to get not success test info: ${error.message}`);
+      core.setOutput('notSuccessTestInfo', '{}');
     });
   }
 

@@ -1,10 +1,10 @@
-const ParserManager = require('./src/parsers');
+const ParserManager = require('../src/parsers');
 
 console.log('Testing ParserManager...');
 
 const parserManager = new ParserManager();
 const results = parserManager.autoDetectAndParse({
-  coverageFile: 'test-data/coverage/coverage.json',
+  coverageFile: 'tests/test-data/coverage/coverage.json',
   includeFileDetails: true,
   maxFilesToShow: 10,
 });

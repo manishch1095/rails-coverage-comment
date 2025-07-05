@@ -8,15 +8,24 @@ const mockContext = {
   payload: { pull_request: { number: 123 } },
 };
 
-// Mock GitHub API
+// Mock GitHub API with changed files
 const mockOctokit = {
   issues: {
     listComments: async () => ({ data: [] }),
     createComment: async (params) => {
-      console.log('=== COMMENT BODY ===');
+      console.log('=== COMMENT BODY (NEW OPTIONS) ===');
       console.log(params.body);
       console.log('=== END COMMENT ===');
     },
+  },
+  pulls: {
+    listFiles: async () => ({
+      data: [
+        { filename: 'app/controllers/users_controller.rb' },
+        { filename: 'app/models/user.rb' },
+        { filename: 'app/services/user_service.rb' },
+      ],
+    }),
   },
 };
 
@@ -31,19 +40,21 @@ require.cache[require.resolve('@actions/github')] = {
   exports: mockGithub,
 };
 
-// Test the action with real coverage file
-async function testRealCoverage() {
-  console.log('Testing with real coverage file...');
+// Test the action with new configurable options
+async function testNewOptions() {
+  console.log('Testing with new configurable options...');
 
   // Set up inputs as environment variables
   process.env.INPUT_GITHUB_TOKEN = 'test-token';
   process.env.INPUT_COVERAGE_FILE =
     '/Users/manishchauhan/projects/title_chaining/coverage/coverage.json';
-  process.env.INPUT_INCLUDE_FILE_DETAILS = 'true';
+  process.env.INPUT_INCLUDE_CATEGORY_SUMMARY = 'true'; // Enable category summary
+  process.env.INPUT_INCLUDE_CHANGED_FILES_DETAILS = 'true'; // Enable changed files details
+  process.env.INPUT_INCLUDE_FILE_DETAILS = 'false';
   process.env.INPUT_MAX_FILES_TO_SHOW = '10';
   process.env.INPUT_INCLUDE_LAST_RUN = 'true';
   process.env.INPUT_LAST_RUN_TITLE = 'SimpleCov Coverage Metrics';
-  process.env.INPUT_TITLE = 'Coverage Report';
+  process.env.INPUT_TITLE = 'Coverage Report with New Options';
   process.env.INPUT_HIDE_COMMENT = 'false';
 
   // Mock the core.getInput function
@@ -76,10 +87,10 @@ async function testRealCoverage() {
 
   // Run the main action
   try {
-    require('./src/index.js');
+    require('../src/index.js');
   } catch (error) {
     console.error('Error running action:', error);
   }
 }
 
-testRealCoverage();
+testNewOptions();

@@ -37,8 +37,8 @@ async function testCIOutput() {
 
   // Set up inputs exactly as the CI workflow does
   process.env.INPUT_GITHUB_TOKEN = 'test-token';
-  process.env.INPUT_COVERAGE_FILE = './test-data/coverage/coverage.json';
-  process.env.INPUT_TEST_RESULTS_PATH = './test-data/test-results.xml';
+  process.env.INPUT_COVERAGE_FILE = './tests/test-data/coverage/coverage.json';
+  process.env.INPUT_TEST_RESULTS_PATH = './tests/test-data/test-results.xml';
   process.env.INPUT_INCLUDE_LAST_RUN = 'true';
   process.env.INPUT_LAST_RUN_TITLE = 'SimpleCov Coverage Metrics';
   process.env.INPUT_INCLUDE_FILE_DETAILS = 'true';
@@ -76,7 +76,7 @@ async function testCIOutput() {
 
   // Run the main action
   try {
-    require('./src/index.js');
+    require('../src/index.js');
   } catch (error) {
     console.error('Error running action:', error);
   }
