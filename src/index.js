@@ -382,6 +382,7 @@ const main = async () => {
     },
   );
 
+
   const { context, repository } = github;
   const { repo, owner } = context.repo;
   const { eventName, payload } = context;
@@ -406,6 +407,31 @@ const main = async () => {
     testResultsFile: testResultsPath || 'test-results.xml',
   });
 
+  core.info('=== Configuration Values ===');
+  core.info(`token: ${token ? '[SET]' : '[NOT SET]'}`);
+  core.info(`title: ${title || '[NOT SET]'}`);
+  core.info(`hideBadge: ${hideBadge}`);
+  core.info(`hideReport: ${hideReport}`);
+  core.info(`coverageFile: ${coverageFile || '[NOT SET]'}`);
+  core.info(`includeFileDetails: ${includeFileDetails}`);
+  core.info(`maxFilesToShow: ${maxFilesToShow}`);
+  core.info(`includeLastRun: ${includeLastRun}`);
+  core.info(`lastRunTitle: ${lastRunTitle}`);
+  core.info(`testResultsPath: ${testResultsPath || '[NOT SET]'}`);
+  core.info(`testResultsTitle: ${testResultsTitle}`);
+  core.info(`issueNumberInput: ${issueNumberInput || '[NOT SET]'}`);
+  core.info(`hideComment: ${hideComment}`);
+  core.info(`createNewComment: ${createNewComment}`);
+  core.info(`uniqueIdForComment: ${uniqueIdForComment || '[NOT SET]'}`);
+  core.info(`multipleFiles: ${multipleFiles ? multipleFiles.join(', ') : '[NOT SET]'}`);
+  core.info(`reportOnlyChangedFiles: ${reportOnlyChangedFiles}`);
+  core.info(`includeCategorySummary: ${includeCategorySummary}`);
+  core.info(`includeChangedFilesDetails: ${includeChangedFilesDetails}`);
+  core.info('=== End Configuration Values ===');
+
+  core.info(`eventName: ${eventName}`);
+
+  //
   // Generate coverage section
   let coverageHtml = '';
   if (parsedData.coverage && !hideReport) {
